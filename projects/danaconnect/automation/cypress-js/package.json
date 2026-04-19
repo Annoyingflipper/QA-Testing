@@ -1,0 +1,17 @@
+{
+  "name": "danaconnect-qa-cypress",
+  "version": "1.0.0",
+  "description": "Cypress E2E tests for DANAConnect platform",
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
+    "cy:run:smoke": "cypress run --spec 'cypress/e2e/login/smoke.cy.js'",
+    "cy:run:security": "cypress run --spec 'cypress/e2e/login/security.cy.js'"
+  },
+  "devDependencies": {
+    "cypress": "^13.16.0",
+    "mochawesome": "^7.1.3",
+    "mochawesome-merge": "^4.3.0",
+    "mochawesome-report-generator": "^6.2.0"
+  }
+}

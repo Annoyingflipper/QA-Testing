@@ -1,0 +1,19 @@
+# ============================================================
+# REQUIREMENTS.TXT — Python dependencies for Playwright tests
+# ============================================================
+# Playwright is Microsoft's browser automation tool.
+# Key differences from Selenium:
+#   - Faster execution (uses browser DevTools protocol directly)
+#   - Auto-waiting built in (no need for explicit waits most of the time)
+#   - Better handling of modern web apps (SPAs, shadow DOM)
+#   - Built-in screenshot/video recording
+#
+# After installing, run: playwright install
+# (This downloads the browser binaries — Chrome, Firefox, Safari)
+# ============================================================
+
+playwright==1.49.1         # Browser automation (the main library)
+pytest==8.3.4              # Test runner (same as Selenium project)
+pytest-playwright==0.6.2   # Connects Playwright to pytest (provides fixtures)
+pytest-html==4.1.1         # HTML test reports
+python-dotenv==1.0.1       # Environment variables from .env

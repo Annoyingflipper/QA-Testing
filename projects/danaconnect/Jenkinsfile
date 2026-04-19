@@ -1,0 +1,255 @@
+// ============================================================
+// JENKINSFILE — CI/CD Pipeline for QA Test Automation
+// ============================================================
+// Owner: Casey (Automation Engineer)
+//
+// WHAT IS JENKINS?
+// Jenkins is a "CI/CD server" — software that runs on a
+// computer (yours or a server) and automatically executes
+// tasks. Think of it as a robot assistant that:
+//   1. Watches your code repository
+//   2. When code changes, it runs your tests automatically
+//   3. Reports the results (email, Slack, dashboard)
+//
+// WHAT IS A JENKINSFILE?
+// This file describes the "pipeline" — the sequence of steps
+// Jenkins should follow. It's written in "Groovy" syntax
+// (a programming language), but it's mostly just a recipe:
+//   "First do this, then do that, then report results."
+//
+// WHAT IS A PIPELINE?
+// A pipeline is a series of "stages" that run in order:
+//   Setup → Run Tests → Collect Results → Notify Team
+//
+// Each stage can have multiple "steps" (individual commands).
+// If a stage fails, Jenkins can either stop or continue to
+// the next stage (depending on how we configure it).
+//
+// HOW TO USE THIS:
+// 1. Install Jenkins (brew install jenkins-lts on Mac)
+// 2. Start Jenkins (jenkins-lts)
+// 3. Open http://localhost:8080 in your browser
+// 4. Create a "Pipeline" job
+// 5. Point it to this repo → Jenkins reads this Jenkinsfile
+// 6. Click "Build Now" (or set up a schedule/trigger)
+// ============================================================
+
+// 'pipeline' = the top-level container for everything
+pipeline {
+
+    // 'agent any' = run on any available Jenkins node (machine)
+    // In a larger setup, you might specify: agent { label 'mac' }
+    agent any
+
+    // ── ENVIRONMENT ─────────────────────────────────────────
+    // Variables available to all stages.
+    // credentials() pulls secrets from Jenkins' secure vault
+    // (so passwords don't appear in the Jenkinsfile or logs).
+    //
+    // You'd set these up in Jenkins: Manage → Credentials → Add
+    // ─────────────────────────────────────────────────────────
+
+    environment {
+        BASE_URL = 'https://portal.danaconnect.com'
+        // These reference Jenkins credentials (set up in Jenkins UI):
+        TEST_COMPANY_CODE = credentials('danaconnect-company-code')
+        TEST_USERNAME = credentials('danaconnect-username')
+        TEST_PASSWORD = credentials('danaconnect-password')
+    }
+
+    // ── OPTIONS ─────────────────────────────────────────────
+    // Global settings for the pipeline run.
+    // ─────────────────────────────────────────────────────────
+
+    options {
+        // Kill the build if it takes more than 30 minutes
+        // (prevents stuck builds from running forever)
+        timeout(time: 30, unit: 'MINUTES')
+
+        // Keep the last 10 build results (save disk space)
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+
+        // Add timestamps to console output (helpful for debugging)
+        timestamps()
+    }
+
+    // ── STAGES ──────────────────────────────────────────────
+    // The actual work happens here. Each stage is one phase
+    // of our testing pipeline.
+    // ─────────────────────────────────────────────────────────
+
+    stages {
+
+        // ─── STAGE 1: Setup ─────────────────────────────────
+        stage('Setup') {
+            // 'parallel' runs sub-stages at the same time
+            // (saves time — install Python and Node simultaneously)
+            parallel {
+
+                stage('Python Dependencies') {
+                    steps {
+                        echo '📦 Installing Python test dependencies...'
+
+                        // Create a virtual environment (isolated Python)
+                        // This prevents our packages from conflicting
+                        // with other Python projects on the machine.
+                        sh '''
+                            python3 -m venv venv
+                            . venv/bin/activate
+                            pip install -r automation/selenium-python/requirements.txt
+                            pip install -r automation/playwright-python/requirements.txt
+                            playwright install chromium
+                        '''
+                    }
+                }
+
+                stage('Node Dependencies') {
+                    steps {
+                        echo '📦 Installing Cypress dependencies...'
+
+                        // 'dir()' changes to a directory for the commands inside
+                        dir('automation/cypress-js') {
+                            sh 'npm ci'  // 'ci' = clean install (faster, uses lockfile)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─── STAGE 2: Smoke Tests ──────────────────────────
+        // These run FIRST and FAST. If smoke fails, we stop
+        // everything — no point running full tests if basic
+        // functionality is broken.
+        // ─────────────────────────────────────────────────────
+
+        stage('Smoke Tests') {
+            steps {
+                echo '🔥 Running smoke tests (must pass to continue)...'
+
+                sh '''
+                    . venv/bin/activate
+                    cd automation/selenium-python
+                    pytest -m smoke --html=reports/smoke-report.html --self-contained-html
+                '''
+            }
+            // 'post' runs after the stage, regardless of pass/fail
+            post {
+                failure {
+                    echo '❌ SMOKE TESTS FAILED — Blocking pipeline. Notifying Alex.'
+                    // In a real setup, this would send a Slack/email notification
+                }
+            }
+        }
+
+        // ─── STAGE 3: Full Test Suite ───────────────────────
+        // Only runs if smoke tests passed.
+        // All three frameworks run in parallel.
+        // ─────────────────────────────────────────────────────
+
+        stage('Full Test Suite') {
+            parallel {
+
+                stage('Selenium Tests') {
+                    steps {
+                        echo '🧪 Running Selenium + pytest tests...'
+                        sh '''
+                            . venv/bin/activate
+                            cd automation/selenium-python
+                            pytest --html=reports/selenium-report.html --self-contained-html -v
+                        '''
+                    }
+                    post {
+                        always {
+                            // Archive the HTML report so it's downloadable from Jenkins
+                            archiveArtifacts artifacts: 'automation/selenium-python/reports/*.html',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+
+                stage('Playwright Tests') {
+                    steps {
+                        echo '🎭 Running Playwright + pytest tests...'
+                        sh '''
+                            . venv/bin/activate
+                            cd automation/playwright-python
+                            pytest --html=reports/playwright-report.html --self-contained-html -v
+                        '''
+                    }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'automation/playwright-python/reports/*',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+
+                stage('Cypress Tests') {
+                    steps {
+                        echo '🌲 Running Cypress tests...'
+                        dir('automation/cypress-js') {
+                            sh 'npx cypress run'
+                        }
+                    }
+                    post {
+                        always {
+                            // Save Cypress screenshots and videos
+                            archiveArtifacts artifacts: 'automation/cypress-js/reports/**/*',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
+            }
+        }
+
+        // ─── STAGE 4: Security Tests ────────────────────────
+        // Run security tests separately so we can track them
+        // as their own category in reports.
+        // ─────────────────────────────────────────────────────
+
+        stage('Security Tests') {
+            steps {
+                echo '🔒 Running security test suite (Sam)...'
+                sh '''
+                    . venv/bin/activate
+                    cd automation/selenium-python
+                    pytest -m security --html=reports/security-report.html --self-contained-html -v
+                '''
+            }
+        }
+    }
+
+    // ── POST: Runs after ALL stages ─────────────────────────
+    // This is where we collect results and notify the team.
+    // ─────────────────────────────────────────────────────────
+
+    post {
+        always {
+            echo '📊 Collecting test reports...'
+
+            // Publish HTML reports in Jenkins UI
+            publishHTML(target: [
+                reportDir: 'automation/selenium-python/reports',
+                reportFiles: 'smoke-report.html,selenium-report.html,security-report.html',
+                reportName: 'Test Reports',
+                keepAll: true,
+            ])
+        }
+
+        success {
+            echo '✅ All tests passed! Pipeline complete.'
+            // Uncomment to notify Slack:
+            // slackSend(color: 'good', message: "QA Pipeline PASSED: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+        }
+
+        failure {
+            echo '❌ Some tests failed. Check reports for details.'
+            // Uncomment to notify Slack:
+            // slackSend(color: 'danger', message: "QA Pipeline FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+        }
+
+        unstable {
+            echo '⚠️ Pipeline unstable — some tests may have been skipped or flaky.'
+        }
+    }
+}

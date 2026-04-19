@@ -1,0 +1,8 @@
+# DANAConnect Framework Tests — Selenium Dependencies
+# Install with: pip install -r requirements.txt
+
+pytest==8.1.1                  # Test runner
+selenium==4.19.0               # Browser automation
+webdriver-manager==4.0.1       # Auto-download browser drivers
+python-dotenv==1.0.1           # Load .env credentials
+allure-pytest==2.13.5          # Allure reporting integration

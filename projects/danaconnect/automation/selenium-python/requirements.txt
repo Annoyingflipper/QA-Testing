@@ -1,0 +1,16 @@
+# ============================================================
+# REQUIREMENTS.TXT — Python dependencies for Selenium tests
+# ============================================================
+# This file lists all the Python packages our tests need.
+# Install them by running: pip install -r requirements.txt
+#
+# Think of this as a "shopping list" — Python reads it and
+# downloads everything listed here from the internet.
+# ============================================================
+
+selenium==4.27.1          # Browser automation library — controls Chrome/Firefox with code
+pytest==8.3.4             # Test runner — finds and executes our test functions
+pytest-html==4.1.1        # Generates pretty HTML test reports (instead of just terminal output)
+pytest-xdist==3.5.0       # Lets us run tests in parallel (multiple browsers at once)
+webdriver-manager==4.0.2  # Automatically downloads the right browser driver (no manual setup)
+python-dotenv==1.0.1      # Loads environment variables from a .env file (for passwords, URLs)

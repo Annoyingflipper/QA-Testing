@@ -1,0 +1,9 @@
+# DANAConnect Framework Tests — Playwright Dependencies
+# Install with: pip install -r requirements.txt
+# Then install browsers: playwright install
+
+pytest==8.1.1                  # Test runner
+playwright==1.43.0             # Browser automation
+pytest-playwright==0.5.0       # Playwright + pytest integration
+python-dotenv==1.0.1           # Load .env credentials
+allure-pytest==2.13.5          # Allure reporting integration

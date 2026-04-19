@@ -1,0 +1,131 @@
+/**
+ * DANAConnect Framework Tests — Jenkins Pipeline
+ * ================================================
+ * This Jenkinsfile defines the CI/CD pipeline for running all three
+ * test frameworks (Playwright, Selenium, Cypress) and generating
+ * Allure reports.
+ *
+ * How Jenkins pipelines work:
+ * - 'pipeline' is the top-level block that defines the entire job
+ * - 'agent any' means this can run on any available Jenkins node
+ * - 'stages' contain the ordered steps of the pipeline
+ * - 'parallel' runs multiple stages at the same time (faster!)
+ * - 'post' runs cleanup steps after the pipeline finishes
+ *
+ * Prerequisites on Jenkins server:
+ * - Python 3.x installed
+ * - Node.js 18+ installed
+ * - Chrome/Chromium browser installed
+ * - Allure Jenkins plugin installed
+ * - Allure commandline tool installed
+ */
+
+pipeline {
+    // Run on any available Jenkins agent (worker machine)
+    agent any
+
+    // ── Environment Variables ─────────────────────────────────────────
+    // These are available to all stages in the pipeline.
+    // credentials() reads from Jenkins Credential Store (secure).
+    environment {
+        BASE_URL = 'https://portal.danaconnect.com/'
+        // Store these in Jenkins Credentials (Manage Jenkins > Credentials)
+        // COMPANY = credentials('danaconnect-company')
+        // USERNAME = credentials('danaconnect-username')
+        // PASSWORD = credentials('danaconnect-password')
+    }
+
+    stages {
+        // ── Stage 1: Install Dependencies ─────────────────────────────
+        stage('Install Dependencies') {
+            parallel {
+                // Install Python dependencies for Playwright
+                stage('Playwright Deps') {
+                    steps {
+                        dir('automation/playwright') {
+                            sh 'pip install -r requirements.txt'
+                            sh 'playwright install chromium'
+                        }
+                    }
+                }
+                // Install Python dependencies for Selenium
+                stage('Selenium Deps') {
+                    steps {
+                        dir('automation/selenium') {
+                            sh 'pip install -r requirements.txt'
+                        }
+                    }
+                }
+                // Install Node.js dependencies for Cypress
+                stage('Cypress Deps') {
+                    steps {
+                        dir('automation/cypress') {
+                            sh 'npm ci'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Stage 2: Run Tests (in parallel) ──────────────────────────
+        stage('Run Tests') {
+            parallel {
+                // Run Playwright tests
+                stage('Playwright Tests') {
+                    steps {
+                        dir('automation/playwright') {
+                            sh '''
+                                pytest tests/ \
+                                    --alluredir=../../reports/allure-results/playwright \
+                                    -v \
+                                    --tb=short
+                            '''
+                        }
+                    }
+                }
+                // Run Selenium tests
+                stage('Selenium Tests') {
+                    steps {
+                        dir('automation/selenium') {
+                            sh '''
+                                pytest tests/ \
+                                    --alluredir=../../reports/allure-results/selenium \
+                                    -v \
+                                    --tb=short
+                            '''
+                        }
+                    }
+                }
+                // Run Cypress tests
+                stage('Cypress Tests') {
+                    steps {
+                        dir('automation/cypress') {
+                            sh 'npx cypress run --reporter mochawesome'
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Post-Pipeline Actions ─────────────────────────────────────────
+    // These run after all stages, regardless of success or failure.
+    post {
+        always {
+            // Generate Allure report from all test results
+            allure([
+                results: [
+                    [path: 'reports/allure-results/playwright'],
+                    [path: 'reports/allure-results/selenium']
+                ]
+            ])
+        }
+        failure {
+            // Notify on failure (configure your notification method)
+            echo 'Tests failed! Check Allure report for details.'
+        }
+        success {
+            echo 'All tests passed!'
+        }
+    }
+}
