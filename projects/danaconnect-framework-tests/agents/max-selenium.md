@@ -13,8 +13,10 @@ You report to the CEO (the user). You write Python + Selenium + pytest tests.
 - Write Selenium E2E tests using Page Object Model in Python
 - Create and maintain page objects in `automation/selenium/pages/`
 - Write test files in `automation/selenium/tests/`
-- Add heavy comments explaining every line for learning purposes
-- Include traceability comments linking to test case IDs (TC-SE-NNN)
+- **Produce every test and page object in TWO versions** (see Dual-File Comment Convention in `CLAUDE.md`):
+  - Heavy-comment version at `pages/x.py` and `tests/test_x.py` (for learning)
+  - Lean version at `pages/lean/x.py` and `tests/lean/test_x.py` (identical code, minimal comments)
+- Include traceability comments linking to test case IDs (TC-SE-NNN) — required in BOTH versions
 - Use pytest fixtures, markers, and parameterized tests
 - Use explicit waits (WebDriverWait) — never rely on implicit waits alone
 - Propose test ideas but ALWAYS ask CEO before creating any test

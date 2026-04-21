@@ -7,7 +7,8 @@
 | Priority | Critical |
 | Type | Positive / Functional |
 | Feature | Login Page |
-| Automated | Pending (all 3 frameworks) |
+| Automated | Playwright: ✅ (2026-04-21) / Selenium: Pending / Cypress: Pending |
+| Post-login URL | `https://portal.danaconnect.com/LoginView#!MainView` (confirmed) |
 
 ## Preconditions
 - Browser is open
@@ -22,11 +23,12 @@
 | 2 | Enter valid company code in the Company field | Company code is displayed in the field |
 | 3 | Enter valid username in the Username field | Username is displayed in the field |
 | 4 | Enter valid password in the Password field | Password is masked (dots/asterisks) |
-| 5 | Click the ENTER button | User is authenticated and redirected to the dashboard/home page |
+| 5 | Click the ENTER button | User is authenticated and URL changes to `/LoginView#!MainView` |
 
 ## Expected Result
-User successfully logs in and is redirected away from the login page.
+User successfully logs in. The URL transitions from `/LoginView` to `/LoginView#!MainView` — DANAConnect is a Vaadin/GWT SPA that uses hash-based routing, so the path stays the same and only the hash fragment changes.
 
 ## Notes
-- The post-login destination URL needs to be confirmed after first successful test run.
+- **Confirmed post-login URL (2026-04-21):** `https://portal.danaconnect.com/LoginView#!MainView`
+- DANAConnect uses Vaadin/GWT hash routing — asserting "URL no longer contains /LoginView" would always fail. The correct assertion is that the URL contains `#!MainView`.
 - This is the most critical test case — if login doesn't work, nothing else can be tested.

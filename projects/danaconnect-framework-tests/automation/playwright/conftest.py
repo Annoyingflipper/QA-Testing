@@ -41,21 +41,65 @@ def base_url():
     return os.getenv('BASE_URL', 'https://portal.danaconnect.com/')
 
 
+class Credentials:
+    """
+    A bundle of login credentials with a SAFE repr.
+
+    Why a class instead of a plain dict?
+    ------------------------------------
+    When a pytest test fails, pytest prints the values of every fixture
+    the test received — including credentials. If credentials is a plain
+    dict like {'password': 'mySecret123'}, the password ends up in:
+        - Your terminal scrollback
+        - CI log files (Jenkins, GitHub Actions, etc.)
+        - Any screenshots of failed test output
+        - Anywhere a teammate pastes the error message
+
+    That's a real-world incident waiting to happen. This class overrides
+    __repr__ to mask the password so failure output shows:
+        Credentials(company='venturestars', username='vmaniglia', password='***')
+    instead of leaking the real password.
+
+    Tests access fields via attributes: creds.company, creds.password.
+    """
+
+    def __init__(self, company, username, password):
+        # Store each field as a plain attribute — simple and explicit.
+        self.company = company
+        self.username = username
+        self.password = password
+
+    def __repr__(self):
+        # __repr__ is what pytest prints in failure tracebacks.
+        # We mask the password here so it NEVER appears in logs.
+        # The company and username are considered low-sensitivity
+        # so we leave them visible (helpful for debugging env issues).
+        return (
+            f"Credentials(company={self.company!r}, "
+            f"username={self.username!r}, "
+            f"password='***')"
+        )
+
+
 @pytest.fixture(scope="session")
 def credentials():
     """
-    Returns a dictionary with all login credentials from .env.
+    Returns a Credentials object populated from .env.
 
-    We store credentials in a dictionary so tests can easily access
-    any credential they need: credentials['company'], etc.
+    scope="session" because credentials don't change between tests —
+    we read .env once and reuse the same object for the whole run.
 
-    scope="session" because credentials don't change between tests.
+    Usage in tests:
+        def test_login(credentials):
+            print(credentials.company)   # attribute access
+            print(credentials.password)  # returns real password
+            print(credentials)           # prints with password masked
     """
-    return {
-        'company': os.getenv('COMPANY', ''),
-        'username': os.getenv('USERNAME', ''),
-        'password': os.getenv('PASSWORD', ''),
-    }
+    return Credentials(
+        company=os.getenv('COMPANY', ''),
+        username=os.getenv('USERNAME', ''),
+        password=os.getenv('PASSWORD', ''),
+    )
 
 
 @pytest.fixture(scope="function")

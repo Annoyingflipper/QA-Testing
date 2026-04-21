@@ -104,6 +104,32 @@ danaconnect-framework-tests/
 └── shutdown-team.sh
 ```
 
+## Dual-File Comment Convention
+
+Every test file AND every page object is produced in TWO versions:
+
+1. **Heavy-comment version** (default location — `tests/test_x.py`, `pages/x.py`):
+   - Full module docstring
+   - Paragraph-level docstrings on classes and methods
+   - Inline comments explaining WHAT and WHY for learners
+   - This is the canonical learning artifact
+
+2. **Lean version** (under `lean/` subfolder — `tests/lean/test_x.py`, `pages/lean/x.py`):
+   - One-line module docstring
+   - Docstrings only where the name isn't self-explanatory
+   - No inline comments except where the WHY is non-obvious
+   - Traceability comment (`# Traces to: TC-XX-NNN`) stays — it is required
+   - Same code as the heavy version
+
+### Discovery rules
+- `pytest` (default) runs ONLY the heavy-comment versions (lean folders are in `norecursedirs`).
+- `pytest tests/lean/` runs the lean versions explicitly.
+
+### Applies to all three frameworks
+- Playwright: `automation/playwright/{pages,tests}/lean/`
+- Selenium: `automation/selenium/{pages,tests}/lean/`
+- Cypress: `automation/cypress/cypress/{pages,e2e}/lean/`
+
 ## Traceability Convention
 
 Every test case gets an ID: `TC-<FRAMEWORK>-<NNN>`

@@ -15,14 +15,31 @@ Why use POM?
 - Reusability: Multiple tests can use the same page object.
 
 Page: Login (/LoginView)
-Elements found during reconnaissance:
-- Company field: text input, placeholder "Enter your company code"
-- Username field: text input, placeholder "Enter your user name"
-- Password field: password input, placeholder "Enter your password DANA"
-- ENTER button: submits the login form
-- Privacy Policy link
-- Terms of Use link
-- Footer text
+
+DANAConnect is a **Vaadin/GWT application**. That shapes our locator
+strategy because:
+- Inputs have NO `placeholder`, `name`, or `aria-label` attributes.
+- IDs look like `gwt-uid-9`, `gwt-uid-11` — auto-generated and will
+  change between releases, so we cannot pin to them.
+- The "ENTER" button is a `<div class="v-button">` with role="button",
+  NOT a native `<button>` element.
+- Field labels are rendered as sibling `<span class="v-caption">`
+  elements inside a Vaadin FormLayout `<tr>` row:
+      <tr>
+        <td class="v-formlayout-captioncell"><span class="v-caption">COMPANY*</span></td>
+        <td class="v-formlayout-contentcell"><input ...></td>
+      </tr>
+
+Fresh-session form (what a new browser context sees) has 3 inputs:
+- Company (labelled "COMPANY*")  — text input
+- Username (labelled "Usuario*") — text input
+- Password (labelled "Contraseña*") — password input
+- ENTER button (text "ENTER")
+
+Cached-session form (after login-company cookie is set) shows only
+2 inputs (Username + Password), because the company is remembered.
+Tests should always use a fresh browser context to guarantee the
+3-field form.
 """
 
 
@@ -40,16 +57,47 @@ class LoginPage:
     URL_PATH = "/LoginView"
 
     # ── LOCATORS ───────────────────────────────────────────────────────
-    # These are CSS selectors or Playwright locators used to find elements.
-    # We use placeholder text as locators since the page doesn't have
-    # data-testid attributes. If the placeholders change, update here only.
-    COMPANY_INPUT = 'input[placeholder="Enter your company code"]'
-    USERNAME_INPUT = 'input[placeholder="Enter your user name"]'
-    PASSWORD_INPUT = 'input[placeholder="Enter your password DANA"]'
-    ENTER_BUTTON = 'button:has-text("ENTER")'
-    PRIVACY_POLICY_LINK = 'text=Privacy Policy'
-    TERMS_OF_USE_LINK = 'text=Terms of Use of the Service'
-    FOOTER_TEXT = 'text=DANAConnect Corp. All Rights Reserved'
+    # Locator strategy: POSITIONAL for text inputs, TYPE-based for password.
+    #
+    # Why not label text?
+    # DANAConnect renders login labels in different languages depending
+    # on the session locale: we've observed "COMPANY"/"Usuario"/"Contraseña"
+    # in Spanish-preference sessions and "COMPANY"/"USERNAME"/"PASSWORD" in
+    # fresh English sessions (which Playwright's default context uses).
+    # Pinning locators to label text is brittle across locales.
+    #
+    # Why positional is safe here:
+    # The 3-field login form always renders inputs in the same DOM order:
+    #   Row 1: Company  (first text input)
+    #   Row 2: Username (second text input)
+    #   Row 3: Password (the only password input)
+    # Playwright's `:nth-match(selector, N)` pseudo-class (1-indexed)
+    # picks the N-th match across the whole document.
+    COMPANY_INPUT = ':nth-match(input[type="text"], 1)'
+    USERNAME_INPUT = ':nth-match(input[type="text"], 2)'
+
+    # Password is uniquely identified by input type — there's only one
+    # password field on the page, so this is the cleanest selector.
+    PASSWORD_INPUT = 'input[type="password"]'
+
+    # The ENTER button is a <div class="v-button" role="button">, NOT a
+    # native <button>. There's only one such element on the login page,
+    # so we select by class + role. Text could be "ENTER" (English session)
+    # or "ENTRAR" (Spanish session), so we deliberately do NOT pin by text.
+    ENTER_BUTTON = '.v-button[role="button"]'
+
+    # Footer links are rendered as .v-caption spans with a specific class.
+    # We match by partial text to handle both English and Spanish versions
+    # ("Privacy Policy" / "Política de Privacidad").
+    PRIVACY_POLICY_LINK = '.v-caption-label-signIn-company:has-text("Privacy Policy"), .v-caption-label-signIn-company:has-text("Política")'
+    TERMS_OF_USE_LINK = '.v-caption-label-signIn-company:has-text("Terms of Use"), .v-caption-label-signIn-company:has-text("Términos")'
+
+    # Copyright footer — rendered as <div class="v-label Corp v-label-Corp ...">.
+    # Text: "DANAConnect Corp. All Rights Reserved". We select by the
+    # stable Vaadin class name `.v-label-Corp` to avoid matching other
+    # elements on the page that also mention "DANAConnect" (like the
+    # "Welcome to DANAConnect" greeting caption).
+    FOOTER_TEXT = '.v-label-Corp'
 
     def __init__(self, page):
         """
@@ -61,14 +109,22 @@ class LoginPage:
         """
         self.page = page
 
-    def navigate(self):
+    def navigate(self, base_url):
         """
         Navigate directly to the login page.
 
+        Args:
+            base_url (str): The application's base URL
+                            (e.g., "https://portal.danaconnect.com/")
+
         Uses page.goto() which loads the URL and waits for the page
         to reach the 'load' state (all resources loaded).
+
+        We strip any trailing slash from base_url before appending
+        URL_PATH so we never produce double-slash URLs like
+        "https://portal.danaconnect.com//LoginView".
         """
-        self.page.goto(self.page.url.split('/LoginView')[0] + self.URL_PATH)
+        self.page.goto(base_url.rstrip("/") + self.URL_PATH)
 
     def enter_company(self, company):
         """

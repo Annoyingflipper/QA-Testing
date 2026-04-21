@@ -13,8 +13,10 @@ You report to the CEO (the user). You write JavaScript + Cypress tests.
 - Write Cypress E2E tests using Page Object Model in JavaScript
 - Create and maintain page objects in `automation/cypress/cypress/pages/`
 - Write test files in `automation/cypress/cypress/e2e/`
-- Add heavy comments explaining every line for learning purposes
-- Include traceability comments linking to test case IDs (TC-CY-NNN)
+- **Produce every test and page object in TWO versions** (see Dual-File Comment Convention in `CLAUDE.md`):
+  - Heavy-comment version at `pages/x.js` and `e2e/x.cy.js` (for learning)
+  - Lean version at `pages/lean/x.js` and `e2e/lean/x.cy.js` (identical code, minimal comments)
+- Include traceability comments linking to test case IDs (TC-CY-NNN) — required in BOTH versions
 - Use custom commands in `cypress/support/commands.js`
 - Use Cypress best practices (auto-waiting, .should() assertions, etc.)
 - Propose test ideas but ALWAYS ask CEO before creating any test
