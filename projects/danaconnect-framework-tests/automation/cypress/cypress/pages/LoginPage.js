@@ -1,136 +1,196 @@
 /**
  * DANAConnect — Login Page Object (Cypress)
  * ==========================================
- * Page Object Model for the login page using Cypress.
+ * Page Object Model (POM) for the /LoginView page.
  *
- * Key differences from Python (Playwright/Selenium) versions:
- * - Cypress uses cy.get() to find elements (returns Chainable objects)
- * - Cypress auto-waits for elements — no need for explicit waits
- * - Cypress runs INSIDE the browser, so it's faster than Selenium
- * - We use a class with methods, but Cypress commands are asynchronous
- * - Methods return 'this' to allow method chaining
+ * About the target app
+ * --------------------
+ * DANAConnect is a Vaadin 7-style, GWT-compiled single-page app.
+ * That forces a very specific locator strategy (see TP-LOGIN-001):
  *
- * Page: Login (/LoginView)
+ *   1. Inputs have NO `placeholder`, `name`, or `aria-label` attributes.
+ *      — So [data-testid], [data-cy], and [placeholder] selectors all
+ *        fail. This is why the previous version of this file (which
+ *        used `input[placeholder="Enter your company code"]`) could
+ *        never work against the real site.
+ *
+ *   2. Element IDs look like `gwt-uid-9`, `gwt-uid-11` — auto-generated
+ *      at compile time and DIFFERENT between deploys. Never pin locators
+ *      to these IDs.
+ *
+ *   3. The "ENTER" button is a `<div class="v-button" role="button">`,
+ *      NOT a native `<button>`. So `cy.get('button').contains('ENTER')`
+ *      will never find it.
+ *
+ *   4. Field labels render in the session locale — fresh en-US sessions
+ *      see "COMPANY / USERNAME / PASSWORD / ENTER"; cached Spanish
+ *      sessions see "COMPANY / Usuario / Contraseña / ENTRAR". So
+ *      locators must NOT pin to label text.
+ *
+ * Locator strategy (mirrors Luna's Playwright page object)
+ * --------------------------------------------------------
+ *   - Text inputs:     positional — 1st text input = Company,
+ *                      2nd text input = Username.
+ *   - Password input:  input[type="password"] (only one on the page).
+ *   - ENTER button:    .v-button[role="button"] (only one on the page).
+ *   - Privacy / Terms: .v-caption-label-signIn-company filtered by an
+ *                      English-or-Spanish regex substring.
+ *   - Copyright footer: .v-label-Corp (stable Vaadin class unique to
+ *                      the "DANAConnect Corp. All Rights Reserved"
+ *                      element; won't collide with the "Welcome to
+ *                      DANAConnect" greeting).
+ *
+ * About the POM pattern used here
+ * -------------------------------
+ * Getter-based Page Objects. Each getter returns a FRESH `cy.get()`
+ * chain, so the element reference is re-queried on every access. This
+ * avoids stale references and integrates cleanly with Cypress's
+ * automatic retry-ability.
+ *
+ * Action methods (enterCompany, login, …) compose those getters and
+ * return `this` for chaining.
  */
 
 class LoginPage {
 
-  // ── LOCATORS ───────────────────────────────────────────────────────
-  // In Cypress, we define locators as methods that return cy.get() chains.
-  // This is different from Python where we store selector strings.
-  // Using methods ensures Cypress's retry mechanism works correctly.
+  // ── URL ──────────────────────────────────────────────────────────────
+  // Relative path — Cypress prepends baseUrl from cypress.config.js.
+  URL_PATH = '/LoginView';
+
+  // ── SELECTORS ────────────────────────────────────────────────────────
+  // Exposed as static class members so specs can import them directly
+  // if they ever need to drive cy.get() themselves (e.g., to handle a
+  // custom multi-match scenario).
+  static TEXT_INPUT   = 'input[type="text"]';       // paired with .eq(0) / .eq(1)
+  static PASSWORD_INP = 'input[type="password"]';
+  static ENTER_BUTTON = '.v-button[role="button"]';
+  static FOOTER_TEXT  = '.v-label-Corp';
+  // Both the Privacy and Terms links are rendered as spans with this
+  // Vaadin class. We filter the matched set by text to pick the right one.
+  static CAPTION_LINK = '.v-caption-label-signIn-company';
+
+  // ── ELEMENT GETTERS ──────────────────────────────────────────────────
+  // Getters return live `cy.get()` / `cy.contains()` chains. Each access
+  // re-queries the DOM, which is exactly what Cypress's retry logic
+  // wants — elements never go "stale" the way they can in Selenium.
 
   /**
-   * Returns the Company input field element.
-   * cy.get() finds elements using CSS selectors, just like
-   * document.querySelector() in plain JavaScript.
+   * First text input on the page = the Company code field.
+   *
+   * `.eq(0)` is Cypress's 0-indexed equivalent of Playwright's
+   * `:nth-match(input[type="text"], 1)`.
    */
-  getCompanyInput() {
-    return cy.get('input[placeholder="Enter your company code"]');
+  get companyInput() {
+    return cy.get(LoginPage.TEXT_INPUT).eq(0);
   }
 
   /**
-   * Returns the Username input field element.
+   * Second text input on the page = the Username field.
    */
-  getUsernameInput() {
-    return cy.get('input[placeholder="Enter your user name"]');
+  get usernameInput() {
+    return cy.get(LoginPage.TEXT_INPUT).eq(1);
   }
 
   /**
-   * Returns the Password input field element.
+   * The only `input[type="password"]` on the page.
    */
-  getPasswordInput() {
-    return cy.get('input[placeholder="Enter your password DANA"]');
+  get passwordInput() {
+    return cy.get(LoginPage.PASSWORD_INP);
   }
 
   /**
-   * Returns the ENTER button element.
-   * cy.contains() finds an element that contains the specified text.
+   * The Vaadin ENTER "button" — actually a `<div class="v-button">`
+   * with `role="button"`. There's only one such element on the login
+   * page, so the selector is unambiguous.
    */
-  getEnterButton() {
-    return cy.get('button').contains('ENTER');
+  get enterButton() {
+    return cy.get(LoginPage.ENTER_BUTTON);
   }
 
   /**
-   * Returns the Privacy Policy link element.
+   * Privacy Policy link.
+   *
+   * The label text varies by locale, so we scope by the stable Vaadin
+   * class and filter with a regex that matches both English
+   * ("Privacy Policy") and Spanish ("Política de Privacidad").
+   *
+   * `cy.contains(selector, content)` yields the first element matching
+   * both the selector AND the content — ideal for disambiguating
+   * siblings that share the same class.
    */
-  getPrivacyPolicyLink() {
-    return cy.contains('Privacy Policy');
+  get privacyPolicyLink() {
+    return cy.contains(LoginPage.CAPTION_LINK, /Privacy|Pol[íi]tica/);
   }
 
   /**
-   * Returns the Terms of Use link element.
+   * Terms of Use link — same multi-locale strategy as Privacy.
    */
-  getTermsOfUseLink() {
-    return cy.contains('Terms of Use of the Service');
+  get termsOfUseLink() {
+    return cy.contains(LoginPage.CAPTION_LINK, /Terms|T[ée]rminos/);
   }
 
   /**
-   * Returns the footer text element.
+   * Copyright footer. `.v-label-Corp` is a stable Vaadin class unique
+   * to the "DANAConnect Corp. All Rights Reserved" element.
    */
-  getFooterText() {
-    return cy.contains('DANAConnect Corp. All Rights Reserved');
+  get footer() {
+    return cy.get(LoginPage.FOOTER_TEXT);
   }
 
-  // ── ACTIONS ────────────────────────────────────────────────────────
+  // ── NAVIGATION ───────────────────────────────────────────────────────
 
   /**
-   * Navigate to the login page.
-   * cy.visit() loads the URL. If you pass just a path like '/LoginView',
-   * Cypress prepends the baseUrl from cypress.config.js.
+   * Navigate to the login view.
+   *
+   * Why `cy.visit('/LoginView')` and not `cy.visit('/')`?
+   * The DANAConnect root URL does NOT auto-redirect to /LoginView —
+   * Luna discovered this empirically during the first Playwright run.
+   * Going directly is both faster and more deterministic.
    */
-  navigate() {
-    cy.visit('/LoginView');
-    return this; // Return 'this' to allow method chaining
+  visit() {
+    cy.visit(this.URL_PATH);
+    return this;
   }
+
+  // ── ACTIONS ──────────────────────────────────────────────────────────
 
   /**
    * Type the company code into the Company field.
-   * .clear() removes existing text, .type() enters new text.
-   * Cypress's .type() automatically waits for the element to be ready.
    *
-   * @param {string} company - The company code to enter
+   * `.clear()` first removes any pre-filled value (e.g., if the browser
+   * somehow kept a company from a prior run); `.type()` then enters the
+   * new value. Cypress auto-waits for the input to be actionable before
+   * either call.
    */
   enterCompany(company) {
-    this.getCompanyInput().clear().type(company);
+    this.companyInput.clear().type(company);
     return this;
   }
 
-  /**
-   * Type the username into the Username field.
-   * @param {string} username - The username to enter
-   */
   enterUsername(username) {
-    this.getUsernameInput().clear().type(username);
+    this.usernameInput.clear().type(username);
     return this;
   }
 
-  /**
-   * Type the password into the Password field.
-   * @param {string} password - The password to enter
-   */
   enterPassword(password) {
-    this.getPasswordInput().clear().type(password);
+    this.passwordInput.clear().type(password);
     return this;
   }
 
   /**
-   * Click the ENTER button to submit the login form.
+   * Click the ENTER button. Cypress auto-waits for the element to be
+   * visible and actionable before clicking — no explicit wait needed.
    */
   clickEnter() {
-    this.getEnterButton().click();
+    this.enterButton.click();
     return this;
   }
 
   /**
-   * Perform a complete login by filling all fields and clicking ENTER.
-   * This is a convenience method that chains all individual steps.
+   * Full login flow: fill all three fields and click ENTER.
    *
-   * Usage: loginPage.login('venturestars', 'vmaniglia', 'password')
-   *
-   * @param {string} company  - The company code
-   * @param {string} username - The username
-   * @param {string} password - The password
+   * Tests that only care about "get me logged in" call this in one line:
+   *   loginPage.login(company, username, password);
    */
   login(company, username, password) {
     this.enterCompany(company);
@@ -141,8 +201,10 @@ class LoginPage {
   }
 }
 
-// ── Export the page object ────────────────────────────────────────────
-// We export a NEW INSTANCE (not the class) so tests can use it directly:
+// Export a singleton instance. Tests use:
 //   import loginPage from '../pages/LoginPage';
-//   loginPage.enterCompany('venturestars');
+//   loginPage.visit();
+//
+// Matches the existing project style (default export, instance not class)
+// so specs don't need `new LoginPage()` boilerplate everywhere.
 export default new LoginPage();

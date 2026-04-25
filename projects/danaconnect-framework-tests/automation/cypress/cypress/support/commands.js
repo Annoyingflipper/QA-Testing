@@ -1,50 +1,57 @@
 /**
  * DANAConnect Framework Tests — Cypress Custom Commands
  * ======================================================
- * Custom commands extend Cypress with reusable actions.
- *
- * Instead of writing the same steps over and over in tests,
- * we define them once here as custom commands. Then in tests
- * we can simply write: cy.login('company', 'user', 'pass')
+ * Custom commands extend Cypress with reusable actions. Instead of
+ * repeating the same steps in every test, we define them once here
+ * and call `cy.commandName()` from any spec.
  *
  * How custom commands work:
- * - Cypress.Commands.add('name', callback) creates a new command
- * - The command becomes available as cy.name() in all tests
- * - Commands are chainable — they integrate with Cypress's command queue
+ *   - `Cypress.Commands.add('name', callback)` creates a new command.
+ *   - The command becomes available as `cy.name()` in every spec,
+ *     everywhere — no import needed in the spec file itself.
+ *   - Commands are chainable and integrate with Cypress's command queue.
  *
- * This is similar to pytest fixtures in Python, but for Cypress.
+ * Pattern used here: commands DELEGATE to the Page Object.
+ * --------------------------------------------------------
+ * Custom commands in this file are thin wrappers — they import the
+ * singleton page object and call its methods. That way there is
+ * exactly ONE place that knows how to find elements on the login page
+ * (`cypress/pages/LoginPage.js`). When Vaadin changes a class name,
+ * we update the page object once and both the specs AND this custom
+ * command stay in sync.
+ *
+ * Why this matters here specifically:
+ *   The previous version of this file hardcoded selectors like
+ *   `input[placeholder="Enter your company code"]`. Vaadin inputs have
+ *   NO placeholder attribute (see TP-LOGIN-001), so those selectors
+ *   could never match the real site. Routing everything through the
+ *   page object prevents that class of bug from recurring.
  */
 
-// ── Login Command ─────────────────────────────────────────────────────
+import loginPage from '../pages/LoginPage';
+
+// ── cy.login() ────────────────────────────────────────────────────────
 /**
- * Custom command to perform a complete login.
+ * Perform a complete login by filling all three fields and clicking ENTER.
  *
- * Usage in tests:
- *   cy.login('venturestars', 'vmaniglia', 'password123')
- *   // or use environment variables:
- *   cy.login(Cypress.env('COMPANY'), Cypress.env('USERNAME'), Cypress.env('PASSWORD'))
+ * Usage:
+ *   cy.login('venturestars', 'vmaniglia', 'password')
  *
- * @param {string} company  - The company code to enter
- * @param {string} username - The username to enter
- * @param {string} password - The password to enter
+ *   // ...or (preferred) read from the environment:
+ *   cy.login(
+ *     Cypress.env('COMPANY'),
+ *     Cypress.env('USERNAME'),
+ *     Cypress.env('PASSWORD'),
+ *   );
+ *
+ * Note: this command does NOT navigate. The caller is responsible for
+ * getting the browser to /LoginView first (usually via
+ * `loginPage.visit()` in a `beforeEach`).
+ *
+ * @param {string} company  — the company code
+ * @param {string} username — the username
+ * @param {string} password — the password
  */
 Cypress.Commands.add('login', (company, username, password) => {
-  // Type the company code into the Company field
-  // {force: true} bypasses visibility checks if the field is covered
-  cy.get('input[placeholder="Enter your company code"]')
-    .clear()           // Clear any existing text
-    .type(company);    // Type the company code
-
-  // Type the username into the Username field
-  cy.get('input[placeholder="Enter your user name"]')
-    .clear()
-    .type(username);
-
-  // Type the password into the Password field
-  cy.get('input[placeholder="Enter your password DANA"]')
-    .clear()
-    .type(password);
-
-  // Click the ENTER button to submit the login form
-  cy.get('button').contains('ENTER').click();
+  loginPage.login(company, username, password);
 });

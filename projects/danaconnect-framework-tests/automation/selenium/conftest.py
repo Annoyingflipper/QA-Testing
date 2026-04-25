@@ -6,7 +6,8 @@ It provides shared fixtures for Selenium-based tests.
 
 Key differences from Playwright:
 - Selenium uses WebDriver to control browsers (older, more established)
-- We use webdriver-manager to automatically download the right ChromeDriver
+- Selenium 4.6+ ships with built-in Selenium Manager, which automatically
+  downloads the correct ChromeDriver — no third-party tool required.
 - Selenium requires explicit waits (WebDriverWait) — it doesn't auto-wait
 - Selenium uses find_element() instead of Playwright's locator system
 """
@@ -15,8 +16,6 @@ import os                          # For reading environment variables
 import pytest                      # The test framework
 from dotenv import load_dotenv     # Reads .env file into environment variables
 from selenium import webdriver     # Selenium browser automation
-from selenium.webdriver.chrome.service import Service  # Chrome driver service
-from webdriver_manager.chrome import ChromeDriverManager  # Auto-downloads ChromeDriver
 
 # ── Load environment variables from .env file ──────────────────────────
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
@@ -46,8 +45,22 @@ def credentials():
     }
 
 
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Attach the test result to the request node so the ``driver``
+    fixture can check whether the test failed during ``call``
+    and save a screenshot + the page source before quitting the
+    browser. Without this hook, we would have no debugging
+    evidence when a test fails.
+    """
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)
+
+
 @pytest.fixture(scope="function")
-def driver(base_url):
+def driver(base_url, request):
     """
     Creates a fresh Chrome WebDriver instance for each test.
 
@@ -55,17 +68,17 @@ def driver(base_url):
     This ensures complete isolation — no shared cookies or state.
 
     How Selenium's driver setup works:
-    1. ChromeDriverManager().install() downloads the correct ChromeDriver
-       version that matches your installed Chrome browser (automatic!)
-    2. Service() wraps the driver path for Selenium to use
-    3. webdriver.Chrome() launches Chrome with that driver
-    4. implicitly_wait(10) tells Selenium to wait up to 10 seconds
-       when looking for elements before throwing an error
-    5. maximize_window() makes the browser full-screen
-    6. get() navigates to the application URL
+    1. Selenium Manager (built into Selenium 4.6+) detects the
+       installed Chrome version and downloads the matching ChromeDriver
+       automatically on first use. No service= argument needed.
+    2. webdriver.Chrome() launches Chrome with that driver.
+    3. implicitly_wait(10) tells Selenium to wait up to 10 seconds
+       when looking for elements before throwing an error.
+    4. maximize_window() makes the browser full-screen.
+    5. get() navigates to the application URL.
 
     After the test:
-    7. driver.quit() closes the browser and cleans up
+    6. driver.quit() closes the browser and cleans up.
     """
     # ── Set up Chrome options ──
     options = webdriver.ChromeOptions()
@@ -73,9 +86,9 @@ def driver(base_url):
     # options.add_argument('--headless=new')
 
     # ── Create the WebDriver ──
-    # ChromeDriverManager automatically downloads the right ChromeDriver
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
+    # Selenium Manager (built-in, no extra package) resolves and caches
+    # the correct ChromeDriver binary under the hood.
+    driver = webdriver.Chrome(options=options)
 
     # ── Configure the driver ──
     # implicit wait: if an element isn't found immediately, Selenium
@@ -90,6 +103,26 @@ def driver(base_url):
 
     # Give this driver to the test function
     yield driver
+
+    # ── On failure: capture screenshot and page source BEFORE quit ──
+    # The ``pytest_runtest_makereport`` hook above attaches ``rep_call``
+    # to the request node with the test's pass/fail status. If the
+    # test failed, save artefacts into a ``screenshots/`` folder next
+    # to this conftest so we can see what the browser looked like.
+    rep_call = getattr(request.node, "rep_call", None)
+    if rep_call is not None and rep_call.failed:
+        artefacts_dir = os.path.join(os.path.dirname(__file__), "screenshots")
+        os.makedirs(artefacts_dir, exist_ok=True)
+        safe_name = request.node.name.replace("/", "_")
+        try:
+            driver.save_screenshot(os.path.join(artefacts_dir, f"{safe_name}.png"))
+            with open(os.path.join(artefacts_dir, f"{safe_name}.html"), "w") as f:
+                f.write(driver.page_source)
+            with open(os.path.join(artefacts_dir, f"{safe_name}.url.txt"), "w") as f:
+                f.write(driver.current_url)
+        except Exception:
+            # Never let artefact capture mask the real test failure.
+            pass
 
     # ── Cleanup (runs after the test finishes) ──
     driver.quit()  # Close the browser and end the WebDriver session

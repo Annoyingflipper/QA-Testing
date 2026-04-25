@@ -21,6 +21,7 @@ require('dotenv').config({ path: '../../.env' });
 const { defineConfig } = require('cypress');
 
 module.exports = defineConfig({
+  projectId: 'jo88tn',
 
   // ── E2E Test Configuration ──────────────────────────────────────────
   e2e: {

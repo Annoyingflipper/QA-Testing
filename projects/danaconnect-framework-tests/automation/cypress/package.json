@@ -8,9 +8,9 @@
     "cy:run:allure": "cypress run --env allure=true"
   },
   "devDependencies": {
-    "cypress": "^13.7.0",
-    "dotenv": "^16.4.5",
     "@shelex/cypress-allure-plugin": "^2.40.2",
+    "cypress": "^15.14.1",
+    "dotenv": "^16.4.5",
     "mochawesome": "^7.1.3",
     "mochawesome-merge": "^4.3.0",
     "mochawesome-report-generator": "^6.2.0"

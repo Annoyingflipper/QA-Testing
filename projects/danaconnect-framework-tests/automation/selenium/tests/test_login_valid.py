@@ -1,100 +1,117 @@
 """
 DANAConnect — Selenium Tests — Valid Login
 ===========================================
-This file contains the automated test for TC-SE-001: a positive login flow
-that verifies a user with correct credentials is redirected away from the
-login page (i.e., authentication succeeded).
+This file contains the automated test for **TC-SE-001**: the positive
+login flow. It is the Selenium counterpart to Luna's Playwright
+``TC-PW-001`` in ``automation/playwright/tests/test_login.py`` and
+asserts the same thing: a user with valid credentials is authenticated
+and the URL reaches the post-login route.
 
-Why this test exists
---------------------
-Login is the front door. If this breaks, everything behind it is unreachable —
-so it is marked Critical priority. We run it first as a smoke check.
+Why we assert ``#!MainView`` (not "URL changed away from /LoginView")
+---------------------------------------------------------------------
+DANAConnect is a **Vaadin 7 / GWT single-page app with hash-based
+routing**. After a successful login the URL changes from::
+
+    https://portal.danaconnect.com/LoginView
+
+to::
+
+    https://portal.danaconnect.com/LoginView#!MainView
+
+The path portion — ``/LoginView`` — stays forever. Only the hash
+fragment changes from empty to ``#!MainView``. That means the old
+approach "wait until ``/LoginView`` is NOT in the URL" would time out
+even on a successful login, because the path still says ``/LoginView``.
+
+Luna caught this on 2026-04-21 (see ``test-plans/feature-login.md``).
+The correct post-login signal is the PRESENCE of ``#!MainView`` in
+the URL, which we wait for with ``EC.url_contains``.
+
+Why this test matters
+---------------------
+Login is the front door. Every other authenticated test depends on
+this one working. We mark it ``critical`` so it blocks release on
+failure and ``smoke`` so it runs on every commit.
 
 How Selenium differs from Playwright (for learning)
 ---------------------------------------------------
-- Selenium does NOT auto-wait. Every interaction that depends on the DOM
-  being in a certain state must be wrapped in an explicit wait
-  (WebDriverWait + expected_conditions). If we skip this, tests are flaky.
-- Selenium uses find_element() with a (By, value) locator tuple. Playwright
-  uses its own Locator API with auto-waiting.
-- Selenium's send_keys() APPENDS text; we must call .clear() first
-  (the page object handles this internally).
-- Selenium returns WebElement objects; we interact with them via methods
-  like .click(), .send_keys(), .is_displayed(), .get_attribute().
-
-Author: Max (Selenium Test Writer)
+- Selenium does **not** auto-wait. Every DOM interaction must be
+  wrapped in an explicit ``WebDriverWait`` — the POM handles that
+  internally, but this test adds a top-level wait for the final
+  URL change.
+- Selenium has no equivalent of Playwright's
+  ``page.wait_for_load_state("networkidle")``. The idiomatic
+  substitute is "wait for the first element we plan to interact
+  with" — the POM's ``wait_for_form_rendered()`` method.
+- Selenium uses a ``driver`` object; Playwright uses a ``page``.
 """
 
-# ─── Standard library imports ───────────────────────────────────────────
-# pytest is the test framework we use. It picks up any function named
-# `test_*` in any file named `test_*.py` and runs it as a test.
-import pytest
+# ── Standard-library and third-party imports ───────────────────────────
+import pytest                                                        # Test framework + markers
 
-# ─── Selenium imports ───────────────────────────────────────────────────
-# WebDriverWait: used to pause test execution until a condition is met,
-#   up to a timeout. This is Selenium's primary mechanism for dealing with
-#   asynchronous page behavior (e.g., redirects, dynamic content).
+# ── Selenium imports ───────────────────────────────────────────────────
+# ``WebDriverWait`` polls a condition at a fixed interval until it
+# returns truthy or the timeout expires. ``EC.url_contains`` is a
+# ready-made condition that returns True when the driver's current
+# URL contains a given substring — perfect for our ``#!MainView``
+# assertion.
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException             # Cleaner failure message
 
-# TimeoutException: raised by WebDriverWait when the condition is not met
-#   within the given timeout. We catch this to provide a clearer error
-#   message in our assertions.
-from selenium.common.exceptions import TimeoutException
-
-# ─── Page Object import ─────────────────────────────────────────────────
-# We import the LoginPage POM, which encapsulates all locators and actions
-# for the login page. This keeps the test itself clean and readable,
-# and means if the login page's HTML changes, we only update one file.
+# ── Page Object import ─────────────────────────────────────────────────
 from pages.login_page import LoginPage
 
 
-# ─── Test-scoped fixture: login_page ────────────────────────────────────
-# A pytest fixture is a reusable piece of setup code. By putting this in
-# the test file (rather than conftest.py), it is only available to tests
-# in this file. If later we share it across many login test files, we can
-# move it into conftest.py.
-#
-# scope="function" means: create a new LoginPage instance for every test.
-#   This matches the `driver` fixture in conftest.py (also function-scoped),
-#   so every test gets a fresh browser AND a fresh page object.
+# ── Test-scoped fixture: login_page ────────────────────────────────────
+# Defined inline (not in conftest.py) because it's only useful to
+# login tests. If future test files need it too, we can promote it.
 @pytest.fixture(scope="function")
 def login_page(driver):
     """
-    Returns a LoginPage instance bound to the current WebDriver.
+    Build a ``LoginPage`` bound to the ``driver`` fixture.
 
-    Depends on the `driver` fixture (defined in conftest.py), which
-    launches Chrome, maximizes the window, navigates to BASE_URL, and
-    yields the driver to the test.
+    ``scope="function"`` matches the ``driver`` fixture in
+    ``conftest.py`` so every test gets a fresh browser AND a fresh
+    page object. No state leaks between tests.
     """
-    # We simply instantiate LoginPage with the driver. The LoginPage's
-    # __init__ also creates a WebDriverWait for reuse across its methods.
     return LoginPage(driver)
 
 
-# ─── THE TEST ───────────────────────────────────────────────────────────
-# Traces to: TC-SE-001 — Valid Login with Correct Credentials
-#
-# Naming convention: test_<what>_<expected_outcome>
-#   `test_valid_login_redirects_away_from_loginview` tells a reader
-#   exactly what the test checks without reading the body.
-def test_valid_login_redirects_away_from_loginview(driver, login_page, base_url, credentials):
+# ── THE TEST ───────────────────────────────────────────────────────────
+# Markers make it easy to run subsets from the command line:
+#   pytest -m smoke       → run only smoke tests
+#   pytest -m critical    → run only release-blocking tests
+#   pytest -m login       → run only login-feature tests
+# The markers are registered in ``automation/selenium/pytest.ini`` so
+# pytest does not emit a ``PytestUnknownMarkWarning``.
+@pytest.mark.smoke
+@pytest.mark.critical
+@pytest.mark.login
+def test_valid_login_reaches_main_view(driver, login_page, base_url, credentials):
     """
-    TC-SE-001 — Verify that submitting valid credentials authenticates the
-    user and redirects the browser away from /LoginView.
+    Traces to: TC-SE-001 — Valid Login with Correct Credentials
+
+    Scenario:
+        Given the user is on the /LoginView page
+        When they enter a valid company, username, and password
+        And click the ENTER button
+        Then they are authenticated and the URL includes "#!MainView"
 
     Fixtures used:
         driver       — fresh Chrome WebDriver (from conftest.py)
-        login_page   — LoginPage POM bound to the driver (from above)
-        base_url     — e.g., "https://portal.danaconnect.com/" (from conftest)
-        credentials  — dict with 'company', 'username', 'password' (from conftest,
-                       populated from .env — NEVER hardcoded)
+        login_page   — LoginPage POM bound to the driver (above)
+        base_url     — e.g. "https://portal.danaconnect.com/" (conftest)
+        credentials  — dict with 'company', 'username', 'password'
+                       (read from .env — NEVER hardcoded)
     """
 
-    # ── STEP 0: Defensive guard — fail fast if credentials are missing ──
-    # If the .env file is missing or incomplete, we want a clear error
-    # message BEFORE we start typing empty strings into the form (which
-    # would give a misleading failure about "login failed" rather than
-    # "credentials not set").
+    # ── STEP 0: Defensive guard — fail fast if .env is missing ──────────
+    # Without this, an empty-string COMPANY would LOOK like a login
+    # failure (bad credentials) rather than what it actually is
+    # (misconfigured environment). Plain ``assert`` is appropriate
+    # here because we are checking test-infrastructure state, not
+    # the DOM.
     assert credentials['company'], (
         "COMPANY is missing from .env — cannot run TC-SE-001"
     )
@@ -105,81 +122,63 @@ def test_valid_login_redirects_away_from_loginview(driver, login_page, base_url,
         "PASSWORD is missing from .env — cannot run TC-SE-001"
     )
 
-    # ── STEP 1: Navigate to the login page ──────────────────────────────
-    # The driver fixture already navigated to base_url, but the app might
-    # redirect us elsewhere if we land on "/". We explicitly navigate to
-    # /LoginView to guarantee we start in a known state.
-    #
-    # LoginPage.navigate() calls driver.get(base_url + "/LoginView").
-    # driver.get() BLOCKS until document.readyState == 'complete', so after
-    # this line the DOM's initial HTML is loaded.
+    # ── STEP 1: Navigate explicitly to /LoginView ──────────────────────
+    # The ``driver`` fixture already opens ``base_url``, but Luna's
+    # reconnaissance confirmed the DANAConnect root does NOT
+    # auto-redirect to /LoginView. We call ``navigate`` to land on
+    # the login page deterministically.
     login_page.navigate(base_url)
 
-    # Capture the URL BEFORE login. We'll compare against this later to
-    # detect the redirect. Using the driver's current_url (not a hardcoded
-    # string) makes the test resilient to environment differences (e.g.,
-    # staging vs. production base URLs).
-    url_before_login = driver.current_url
+    # ── STEP 2: Wait for the Vaadin form to render ──────────────────────
+    # DANAConnect is a JS-rendered SPA. ``driver.get()`` returns as
+    # soon as the initial HTML is loaded, but the login inputs may
+    # still be drawing. This call blocks until the Company input is
+    # present in the DOM — our proxy for "form ready".
+    login_page.wait_for_form_rendered()
 
-    # ── STEP 2–5: Fill the form and submit ──────────────────────────────
-    # LoginPage.login() is a convenience method that:
-    #   1. Types the company code     (uses send_keys with explicit wait)
-    #   2. Types the username         (uses send_keys with explicit wait)
-    #   3. Types the password         (uses send_keys with explicit wait)
-    #   4. Clicks the ENTER button    (waits for element_to_be_clickable)
-    #
-    # We pass credentials from the fixture — NEVER hardcoded strings.
+    # ── STEP 3: Fill and submit the form ────────────────────────────────
+    # The POM's ``login()`` method wraps send_keys + click with
+    # explicit waits per field. If any field is slow to render, the
+    # POM waits for it.
     login_page.login(
         company=credentials['company'],
         username=credentials['username'],
         password=credentials['password'],
     )
 
-    # ── ASSERTION: Wait for the URL to change ───────────────────────────
-    # Post-login, the app should redirect us to the user's dashboard.
-    # We don't know the exact dashboard URL (it may vary per account),
-    # so we assert that the URL *changed* from /LoginView.
+    # ── ASSERTION: URL reaches #!MainView ───────────────────────────────
+    # Post-login Vaadin pushes the client-side route to ``#!MainView``.
+    # We use ``EC.url_contains("#!MainView")`` — it polls
+    # ``driver.current_url`` until the substring appears or the
+    # timeout expires.
     #
-    # WebDriverWait polls a condition repeatedly (every 500ms by default)
-    # until either:
-    #   (a) the condition returns a truthy value → wait returns that value
-    #   (b) the timeout elapses → wait raises TimeoutException
-    #
-    # We use a timeout of 15 seconds — slightly longer than the default
-    # WAIT_TIMEOUT because a real authentication request + redirect can
-    # take a few seconds on a slow connection.
+    # Why 15s? A real authentication round-trip + client-side route
+    # change can take a few seconds on a slow network. 15s gives us
+    # generous headroom over the 10s default. If login is genuinely
+    # broken, we still fail within a user-tolerable window.
     wait = WebDriverWait(driver, timeout=15)
 
     try:
-        # `lambda d: "/LoginView" not in d.current_url`
-        # This lambda is evaluated on each poll. It returns True the moment
-        # the URL no longer contains "/LoginView", which is our signal that
-        # the redirect has happened.
-        wait.until(lambda d: "/LoginView" not in d.current_url)
+        wait.until(EC.url_contains("#!MainView"))
     except TimeoutException:
-        # If we time out, capture the current URL and any visible error
-        # text to give a useful failure message. pytest.fail() marks the
-        # test as failed with a custom message.
+        # Capture the current URL for a debuggable failure message.
+        # pytest.fail() marks the test failed with a custom string —
+        # the default TimeoutException repr would not show the URL.
         current_url = driver.current_url
         pytest.fail(
-            f"TC-SE-001 FAILED: URL did not change away from /LoginView "
-            f"within 15s. Current URL: {current_url}. "
-            f"Possible causes: invalid credentials in .env, server error, "
-            f"slow network, or an error message was shown instead."
+            "TC-SE-001 FAILED: URL did not reach '#!MainView' within 15s. "
+            f"Current URL: {current_url}. "
+            "Likely causes: invalid credentials in .env, server error, "
+            "network slowness, or Vaadin rendered an inline error banner "
+            "instead of routing forward."
         )
 
-    # ── FINAL ASSERTION (belt-and-suspenders) ───────────────────────────
-    # Even though WebDriverWait succeeded, we explicitly assert the final
-    # state for clarity and to produce a readable failure message if the
-    # URL somehow landed back on /LoginView (e.g., via a redirect loop).
+    # ── FINAL ASSERTION (belt-and-suspenders) ──────────────────────────
+    # Even though WebDriverWait succeeded, we re-check the URL for a
+    # crisp, readable failure message if something somehow regressed
+    # between the wait and this line.
     final_url = driver.current_url
-    assert "/LoginView" not in final_url, (
-        f"Expected to be redirected away from /LoginView, but final URL "
-        f"was: {final_url}"
-    )
-    # Defensive: confirm we actually moved to a different URL, not just
-    # a /LoginView variant that somehow passed the 'not in' check.
-    assert final_url != url_before_login, (
-        f"URL did not change after login. Before: {url_before_login}, "
-        f"After: {final_url}"
+    assert "#!MainView" in final_url, (
+        "Expected URL to contain '#!MainView' after successful login, "
+        f"but final URL was: {final_url}"
     )

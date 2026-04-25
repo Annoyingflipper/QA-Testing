@@ -1,8 +1,8 @@
 # DANAConnect Framework Tests — Selenium Dependencies
 # Install with: pip install -r requirements.txt
+# ChromeDriver is auto-downloaded at runtime by webdriver-manager — no extra step.
 
-pytest==8.1.1                  # Test runner
-selenium==4.19.0               # Browser automation
-webdriver-manager==4.0.1       # Auto-download browser drivers
-python-dotenv==1.0.1           # Load .env credentials
-allure-pytest==2.13.5          # Allure reporting integration
+pytest==9.0.3                  # Test runner (matches Playwright)
+selenium==4.19.0               # Browser automation (ships Selenium Manager — auto-downloads ChromeDriver)
+python-dotenv==1.2.2           # Load .env credentials (matches Playwright)
+allure-pytest==2.15.3          # Allure reporting integration (matches Playwright)

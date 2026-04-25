@@ -16,6 +16,9 @@ cypress/videos/
 cypress/screenshots/
 cypress/downloads/
 
+# Selenium / Playwright failure artifacts
+automation/*/screenshots/
+
 # Allure reports
 reports/allure-results/
 reports/allure-report/
