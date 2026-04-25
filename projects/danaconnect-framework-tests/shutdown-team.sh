@@ -21,6 +21,18 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 SESSION_DIR="$PROJECT_DIR/sessions/$TIMESTAMP"
 
+# Resolve the previous "latest" target (if any) BEFORE we move the symlink.
+# Used below to carry the CEO live journal forward.
+PREV_LATEST=""
+if [ -L "$PROJECT_DIR/sessions/latest" ]; then
+    PREV_LATEST="$(readlink "$PROJECT_DIR/sessions/latest")"
+    # readlink may return relative or absolute — normalize
+    case "$PREV_LATEST" in
+        /*) ;;
+        *) PREV_LATEST="$PROJECT_DIR/sessions/$PREV_LATEST" ;;
+    esac
+fi
+
 echo "========================================"
 echo "  DANAConnect Framework Tests"
 echo "  Shutting Down QA Team"
@@ -59,6 +71,38 @@ for agent in luna max kai; do
 EOF
 done
 
+# ── CEO live journal: preserve continuity across shutdowns ───────
+# If a previous CEO session file exists, copy it forward so the new
+# `latest/ceo-session.md` continues the same live journal. The PREV_LATEST
+# directory still holds the snapshot at this shutdown moment.
+if [ -n "$PREV_LATEST" ] && [ -f "$PREV_LATEST/ceo-session.md" ]; then
+    cp "$PREV_LATEST/ceo-session.md" "$SESSION_DIR/ceo-session.md"
+    echo "Carried CEO live journal forward from previous session."
+else
+    cat > "$SESSION_DIR/ceo-session.md" << EOF
+# CEO Session — DANAConnect Framework Tests
+# Last updated: $TIMESTAMP
+
+## Where we left off
+(Fresh start — no prior CEO session.)
+
+## Decisions log
+
+## Completed work (chronological)
+
+## In progress
+
+## Next step (top priority)
+
+## Open questions / awaiting CEO input
+
+## Blockers
+
+## Notes for next session
+EOF
+    echo "Created blank CEO session file (no prior journal found)."
+fi
+
 # ── Create session summary placeholder ────────────────────────────
 cat > "$SESSION_DIR/session-summary.md" << EOF
 # Session Summary
@@ -94,6 +138,10 @@ echo "IMPORTANT: Before closing agent windows, tell each agent:"
 echo ""
 echo '  "Save your progress to sessions/latest/<your-name>-session.md'
 echo '   Fill in what you completed, what is in progress, and next steps."'
+echo ""
+echo "The CEO session journal (sessions/latest/ceo-session.md) was carried"
+echo "forward automatically — it should already reflect today's state if you"
+echo "live-journaled. Review it once before opening a new CEO session."
 echo ""
 
 # ── Commit all work ───────────────────────────────────────────────

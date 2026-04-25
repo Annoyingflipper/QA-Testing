@@ -147,6 +147,51 @@ def test_valid_login(page, login_page):
     ...
 ```
 
+## CEO Session Persistence
+
+The CEO (the user) gets a persistent session file alongside the agents at `sessions/latest/ceo-session.md`. This protects against connection drops mid-conversation — the on-disk file is the source of truth, so a dropped session never loses more than the last unflushed turn.
+
+This applies to the **assistant helping the CEO** (i.e., Claude when run from inside this project directory). It does NOT apply to the agents Luna/Max/Kai — they have their own `<name>-session.md` files.
+
+### Start of CEO session — required reading
+
+Before any other work, the assistant MUST:
+
+1. Read `sessions/latest/ceo-session.md` (the CEO live journal)
+2. Read each agent's session file (`luna-session.md`, `max-session.md`, `kai-session.md`)
+3. Summarize "where we left off" to the CEO in 3-5 lines
+4. Ask the CEO whether to continue the prior plan or change direction
+
+If `sessions/latest/ceo-session.md` does not exist, treat this as a fresh start and create the file when the first significant decision or step happens.
+
+### During the session — live journaling
+
+The assistant updates `sessions/latest/ceo-session.md` **incrementally**, not just at the end. Write after each:
+
+- Decision (architectural, scope, process)
+- Completed step (file written, command verified, gap diagnosed)
+- New blocker
+- Change in next-step plan
+
+Sections of the file (keep them up-to-date):
+
+- **Where we left off** — 1-3 lines, current state
+- **Decisions log** — `<date> <decision> — <reason>`
+- **Completed work** — chronological list
+- **In progress** — what's mid-flight + why incomplete
+- **Next step (top priority)** — the very next concrete action
+- **Open questions / awaiting CEO input** — questions the assistant has parked
+- **Blockers** — anything stuck
+- **Notes for next session** — gotchas, decisions worth remembering
+
+### End of session — shutdown
+
+`./shutdown-team.sh` carries the CEO journal forward: the existing `sessions/latest/ceo-session.md` is copied into the new timestamped dir AND remains as the new `latest`. Past timestamped dirs hold the CEO snapshot at each shutdown moment.
+
+### Why this exists
+
+Connection drops happen. Without this protocol, every drop loses everything since the last shutdown. With it, the worst case is losing the current turn — everything before it is on disk.
+
 ## Safety Rules (All Agents)
 
 1. NEVER delete files without CEO approval

@@ -1,0 +1,79 @@
+# DANAConnect Framework Tests — Custom Jenkins Image
+# ====================================================
+# Extends jenkins/jenkins:lts with the runtimes and browsers our pipeline needs.
+#
+# Build:
+#   docker build -t danaconnect-jenkins:lts -f ci-cd/Dockerfile.jenkins .
+#
+# Run (reuses your existing jenkins_home volume so plugins + admin user persist):
+#   docker run -d --name jenkins \
+#     -p 8080:8080 -p 50000:50000 \
+#     -v jenkins_home:/var/jenkins_home \
+#     danaconnect-jenkins:lts
+#
+# What this image adds on top of jenkins/jenkins:lts:
+#   - Python 3 + pip + venv          (Playwright + Selenium pipelines)
+#   - Node.js 20 LTS + npm           (Cypress pipeline)
+#   - Chromium + chromedriver        (browser for Selenium; libs for Playwright/Cypress)
+#   - xvfb + GTK / Cypress libs      (headless display + Cypress runtime deps)
+#   - Allure CLI 2.29.0              (report generation in the post block)
+#   - JAVA_OPTS=-Djava.net.preferIPv4Stack=true   (avoids the IPv6 routing bug
+#                                                  that bit the plugin install)
+
+FROM jenkins/jenkins:lts
+
+# Install system packages as root (Jenkins images run as the `jenkins` user by default)
+USER root
+
+# Combine apt steps into one layer to keep the image small.
+# DEBIAN_FRONTEND=noninteractive prevents apt from blocking on prompts.
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Python toolchain
+    python3 \
+    python3-pip \
+    python3-venv \
+    # System Chromium for Selenium (Playwright + Cypress bring their own browsers)
+    chromium \
+    chromium-driver \
+    # Headless display + libs Cypress needs at runtime
+    xvfb \
+    libgtk2.0-0 \
+    libgtk-3-0 \
+    libgbm-dev \
+    libnotify-dev \
+    libxss1 \
+    libxtst6 \
+    xauth \
+    # Useful extras
+    unzip \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 20 LTS via NodeSource (Debian's apt node is too old for modern Cypress)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Allure CLI — pinned version for reproducibility
+ARG ALLURE_VERSION=2.29.0
+RUN curl -sLo /tmp/allure.tgz \
+        "https://github.com/allure-framework/allure2/releases/download/${ALLURE_VERSION}/allure-${ALLURE_VERSION}.tgz" \
+    && tar -xzf /tmp/allure.tgz -C /opt/ \
+    && ln -s "/opt/allure-${ALLURE_VERSION}/bin/allure" /usr/local/bin/allure \
+    && rm /tmp/allure.tgz
+
+# Allow pip to install into the system Python.
+# Debian 12+ marks the system Python as PEP 668 "externally managed" — without
+# this flag, `pip install` fails. The pipeline already runs in an isolated
+# container, so the usual reasons for that protection don't apply here.
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+# Force IPv4 — the Jenkins JVM otherwise picks AAAA records that Docker can't
+# route, which is what caused the original "Connection refused" plugin install.
+ENV JAVA_OPTS="-Djava.net.preferIPv4Stack=true"
+
+# Drop back to the unprivileged jenkins user for everything Jenkins runs.
+USER jenkins
