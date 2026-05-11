@@ -28,11 +28,16 @@ pipeline {
     // These are available to all stages in the pipeline.
     // credentials() reads from Jenkins Credential Store (secure).
     environment {
+        // Workspace is the QA-Testing repo root; this project lives in a subfolder.
+        // Every dir(...) and allure results path below is anchored from here.
+        PROJECT_DIR = 'projects/danaconnect-framework-tests'
         BASE_URL = 'https://portal.danaconnect.com/'
-        // Store these in Jenkins Credentials (Manage Jenkins > Credentials)
-        // COMPANY = credentials('danaconnect-company')
-        // USERNAME = credentials('danaconnect-username')
-        // PASSWORD = credentials('danaconnect-password')
+        // Pulled from Jenkins Credential Store (Manage Jenkins > Credentials).
+        // Each credentials() call binds the secret-text value to the env var
+        // for every stage; Jenkins masks the value in console output as ****.
+        COMPANY = credentials('danaconnect-company')
+        USERNAME = credentials('danaconnect-username')
+        PASSWORD = credentials('danaconnect-password')
     }
 
     stages {
@@ -42,7 +47,7 @@ pipeline {
                 // Install Python dependencies for Playwright
                 stage('Playwright Deps') {
                     steps {
-                        dir('automation/playwright') {
+                        dir("${PROJECT_DIR}/automation/playwright") {
                             sh 'pip install -r requirements.txt'
                             sh 'playwright install chromium'
                         }
@@ -51,7 +56,7 @@ pipeline {
                 // Install Python dependencies for Selenium
                 stage('Selenium Deps') {
                     steps {
-                        dir('automation/selenium') {
+                        dir("${PROJECT_DIR}/automation/selenium") {
                             sh 'pip install -r requirements.txt'
                         }
                     }
@@ -59,7 +64,7 @@ pipeline {
                 // Install Node.js dependencies for Cypress
                 stage('Cypress Deps') {
                     steps {
-                        dir('automation/cypress') {
+                        dir("${PROJECT_DIR}/automation/cypress") {
                             sh 'npm ci'
                         }
                     }
@@ -73,7 +78,7 @@ pipeline {
                 // Run Playwright tests
                 stage('Playwright Tests') {
                     steps {
-                        dir('automation/playwright') {
+                        dir("${PROJECT_DIR}/automation/playwright") {
                             sh '''
                                 pytest tests/ \
                                     --alluredir=../../reports/allure-results/playwright \
@@ -86,7 +91,7 @@ pipeline {
                 // Run Selenium tests
                 stage('Selenium Tests') {
                     steps {
-                        dir('automation/selenium') {
+                        dir("${PROJECT_DIR}/automation/selenium") {
                             sh '''
                                 pytest tests/ \
                                     --alluredir=../../reports/allure-results/selenium \
@@ -99,7 +104,7 @@ pipeline {
                 // Run Cypress tests
                 stage('Cypress Tests') {
                     steps {
-                        dir('automation/cypress') {
+                        dir("${PROJECT_DIR}/automation/cypress") {
                             sh 'npx cypress run --reporter mochawesome'
                         }
                     }
@@ -115,8 +120,8 @@ pipeline {
             // Generate Allure report from all test results
             allure([
                 results: [
-                    [path: 'reports/allure-results/playwright'],
-                    [path: 'reports/allure-results/selenium']
+                    [path: "${env.PROJECT_DIR}/reports/allure-results/playwright"],
+                    [path: "${env.PROJECT_DIR}/reports/allure-results/selenium"]
                 ]
             ])
         }

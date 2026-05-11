@@ -39,7 +39,7 @@ Before anything else:
    Expected: Python 3.11, Node v20, Chromium 120+, Allure 2.29.0, OpenJDK 17/21.
 
 4. **Then continue Jenkins config (in this order):**
-   - Manage Jenkins → Tools → Allure Commandline → Add Allure → Name `allure`, untick auto-install, Path = `/usr/local/bin/allure`.
+   - Manage Jenkins → Tools → Allure Commandline → Add Allure → Name `allure`, untick auto-install, **Installation directory = `/opt/allure-2.29.0`** (the install root, NOT `/usr/local/bin/allure` — that's a symlink to the binary; Jenkins appends `bin/allure` itself and warns if you give it the binary path).
    - Manage Jenkins → Credentials → add three Secret text entries: IDs `danaconnect-company`, `danaconnect-username`, `danaconnect-password`.
    - Uncomment lines 33-35 in `ci-cd/Jenkinsfile` to wire those credentials in.
    - New Item → Pipeline named `danaconnect-framework-tests` → "Pipeline script from SCM" → Git → script path `ci-cd/Jenkinsfile`. (If repo not pushed yet, flag it — fallback options exist.)
