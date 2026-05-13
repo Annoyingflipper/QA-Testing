@@ -16,6 +16,7 @@ import os                          # For reading environment variables
 import pytest                      # The test framework
 from dotenv import load_dotenv     # Reads .env file into environment variables
 from selenium import webdriver     # Selenium browser automation
+from selenium.webdriver.chrome.service import Service  # Explicit chromedriver path
 
 # ── Load environment variables from .env file ──────────────────────────
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
@@ -80,23 +81,81 @@ def driver(base_url, request):
     After the test:
     6. driver.quit() closes the browser and cleans up.
     """
+    # ── Read HEADLESS env var ──
+    # Default is True so CI / Docker containers work without extra
+    # setup. Run locally with HEADLESS=false to see the browser
+    # window while interactively debugging a test.
+    headless = os.getenv('HEADLESS', 'true').lower() != 'false'
+
     # ── Set up Chrome options ──
     options = webdriver.ChromeOptions()
-    # Add --headless=new for CI/CD runs (no visible browser)
-    # options.add_argument('--headless=new')
+    if headless:
+        # --headless=new is Chrome's modern headless mode (v109+).
+        # Old --headless still works but lacks newer features and
+        # has known rendering differences from real Chrome.
+        options.add_argument('--headless=new')
+        # In Docker the default Chrome sandbox conflicts with the
+        # container's user namespace and Chrome fails to start.
+        # Disabling it is safe in a CI container; never do this
+        # in a user-facing browser.
+        options.add_argument('--no-sandbox')
+        # /dev/shm inside Docker defaults to 64 MB. Chrome's tabs
+        # exceed that quickly and crash with "session deleted". Force
+        # shared memory into /tmp instead, which has more room.
+        options.add_argument('--disable-dev-shm-usage')
+        # Headless mode has no window manager, so explicitly pick
+        # a viewport. DANAConnect's Vaadin UI is responsive and
+        # behaves differently below ~1024px wide.
+        options.add_argument('--window-size=1920,1080')
+
+    # Some Linux distros (including Debian, which our Jenkins image
+    # is built on) install Chromium as `chromium` rather than the
+    # `google-chrome` binary that Selenium looks for by default.
+    # CHROME_BINARY overrides this; otherwise we auto-detect the
+    # standard apt-installed path.
+    chrome_binary = os.getenv('CHROME_BINARY') or (
+        '/usr/bin/chromium' if os.path.exists('/usr/bin/chromium') else None
+    )
+    if chrome_binary:
+        options.binary_location = chrome_binary
 
     # ── Create the WebDriver ──
-    # Selenium Manager (built-in, no extra package) resolves and caches
-    # the correct ChromeDriver binary under the hood.
-    driver = webdriver.Chrome(options=options)
+    # Why we sometimes bypass Selenium Manager:
+    #
+    # Selenium 4.6+ ships with Selenium Manager, which auto-downloads
+    # a chromedriver binary matching the installed Chrome. Convenient,
+    # but there are no `linux/aarch64` binaries published — so on
+    # Apple-Silicon-based Docker images it fails with
+    # "Unsupported platform/architecture combination: linux/aarch64".
+    #
+    # Our Jenkins image ships chromedriver via apt at
+    # /usr/bin/chromedriver (the aarch64 build provided by Debian).
+    # If CHROMEDRIVER_PATH is set OR that path exists, use it via
+    # an explicit Service object. Otherwise (e.g. running locally
+    # on a Mac), fall back to Selenium Manager.
+    chromedriver_path = os.getenv('CHROMEDRIVER_PATH') or (
+        '/usr/bin/chromedriver' if os.path.exists('/usr/bin/chromedriver') else None
+    )
+    if chromedriver_path:
+        driver = webdriver.Chrome(
+            service=Service(chromedriver_path),
+            options=options,
+        )
+    else:
+        # Local dev path: Selenium Manager downloads + caches the
+        # correct chromedriver for the host architecture.
+        driver = webdriver.Chrome(options=options)
 
     # ── Configure the driver ──
     # implicit wait: if an element isn't found immediately, Selenium
     # will keep trying for up to 10 seconds before failing
     driver.implicitly_wait(10)
 
-    # Make the browser window full-screen for consistent screenshots
-    driver.maximize_window()
+    # In headless mode there's no real window to maximise — we've
+    # already pinned a sensible viewport via --window-size. Only
+    # maximise when we're actually showing a window (HEADLESS=false).
+    if not headless:
+        driver.maximize_window()
 
     # Navigate to the application's base URL
     driver.get(base_url)

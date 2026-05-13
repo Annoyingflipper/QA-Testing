@@ -114,15 +114,24 @@ def browser_context(base_url):
     What happens here:
     1. sync_playwright() starts the Playwright engine
     2. p.chromium.launch() opens a Chromium browser
-       - headless=False means you can SEE the browser (useful for debugging)
-       - Change to headless=True for CI/CD runs
+       - Headless is controlled by the HEADLESS env var. Default is
+         True (headless), so CI containers without an X server work
+         out of the box. For local debugging, run with HEADLESS=false
+         to see the browser window — e.g. `HEADLESS=false pytest ...`.
     3. browser.new_context() creates an isolated browser session
     4. yield gives the context to the test
     5. After the test finishes, we close everything (cleanup)
     """
+    # Read HEADLESS env var. We compare the lowercased value to 'false'
+    # so any case (false/False/FALSE) turns headless OFF. Anything else
+    # (including the value being unset entirely) keeps headless ON.
+    headless = os.getenv('HEADLESS', 'true').lower() != 'false'
+
     with sync_playwright() as p:
-        # Launch Chromium browser — set headless=True to run without UI
-        browser = p.chromium.launch(headless=False)
+        # Launch Chromium. headless=True hides the UI (required in CI
+        # where there's no X server) and is meaningfully faster.
+        # headless=False shows the window when debugging locally.
+        browser = p.chromium.launch(headless=headless)
 
         # Create a new browser context (like an incognito window)
         # Each context has its own cookies, cache, and session storage
