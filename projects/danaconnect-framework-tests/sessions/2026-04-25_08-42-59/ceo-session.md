@@ -1,13 +1,11 @@
 # CEO Session — DANAConnect Framework Tests
-# Last updated: 2026-04-25 (closing snapshot before team shutdown)
+# Last updated: 2026-05-13 (mid-session — Jenkins pipeline build #2 just failed)
 
 ## Where we left off
 
-**Last command CEO ran before shutdown:**
-```
-docker build -t danaconnect-jenkins:lts -f ci-cd/Dockerfile.jenkins .
-```
-**Status when team was shut down:** unknown — build may still be running, may have completed, may have failed. Verify FIRST THING next session before doing anything else.
+**Build #2 of the Jenkins pipeline failed at `playwright install chromium` with exit code 127 (command not found).** Root cause: pip in the container falls back to `--user` install because system site-packages is root-owned; user-installed console scripts land in `/var/jenkins_home/.local/bin` which isn't on the default PATH. Fix applied to `ci-cd/Jenkinsfile`: prepended that dir to PATH in the `environment {}` block. About to commit + push and trigger build #3.
+
+**Container/image state verified today (2026-05-13):** image `danaconnect-jenkins:lts` (2.48 GB) is built; container `jenkins` is running on `localhost:8080`. Allure CLI tool configured at `/opt/allure-2.29.0`. Credentials store has three Secret-text entries with correct IDs (`danaconnect-company`, `danaconnect-username`, `danaconnect-password`) after fixing a typo where the first credential's ID was originally `venturestars` (the value instead of the key). Pipeline job `danaconnect-framework-tests` created in Jenkins, pointing at `projects/danaconnect-framework-tests/ci-cd/Jenkinsfile` on `*/main` of the public GitHub repo.
 
 This session covered three threads: (1) CEO session persistence is now set up — this very file + protocol in CLAUDE.md + propagated to qa-team-builder v1/v2 skills; (2) custom Jenkins Dockerfile written at `ci-cd/Dockerfile.jenkins` to fix the bare-LTS gap (no Python/Node/Chrome); (3) Kai shipped TC-CY-001 + TC-CY-002 (Cypress), bringing the framework to parity with Luna's two Playwright tests.
 

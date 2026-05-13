@@ -32,6 +32,11 @@ pipeline {
         // Every dir(...) and allure results path below is anchored from here.
         PROJECT_DIR = 'projects/danaconnect-framework-tests'
         BASE_URL = 'https://portal.danaconnect.com/'
+        // The container's system site-packages is root-owned, so pip falls back
+        // to a --user install and drops console scripts (playwright, pytest, etc.)
+        // into ~/.local/bin, which is NOT on the default jenkins-user PATH.
+        // Prepending it here makes those scripts discoverable in every sh step.
+        PATH = "/var/jenkins_home/.local/bin:${env.PATH}"
         // Pulled from Jenkins Credential Store (Manage Jenkins > Credentials).
         // Each credentials() call binds the secret-text value to the env var
         // for every stage; Jenkins masks the value in console output as ****.
