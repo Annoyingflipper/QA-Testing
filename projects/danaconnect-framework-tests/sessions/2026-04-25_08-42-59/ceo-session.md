@@ -1,11 +1,26 @@
 # CEO Session — DANAConnect Framework Tests
-# Last updated: 2026-05-13 (mid-session — Jenkins pipeline build #2 just failed)
+# Last updated: 2026-05-13 (pipeline GREEN on build #4)
 
 ## Where we left off
 
-**Build #2 of the Jenkins pipeline failed at `playwright install chromium` with exit code 127 (command not found).** Root cause: pip in the container falls back to `--user` install because system site-packages is root-owned; user-installed console scripts land in `/var/jenkins_home/.local/bin` which isn't on the default PATH. Fix applied to `ci-cd/Jenkinsfile`: prepended that dir to PATH in the `environment {}` block. About to commit + push and trigger build #3.
+**Jenkins pipeline `danaconnect-framework-tests` is GREEN as of build #4 (commit `51614f7`).** All three frameworks ran in parallel against the live portal and passed: Playwright 2/2 (14.67s), Selenium 2/2 (15.72s), Cypress 4/4 (13s — 2 heavy + 2 lean specs). Allure report generated from the Playwright + Selenium result dirs and archived as a build artifact.
 
-**Container/image state verified today (2026-05-13):** image `danaconnect-jenkins:lts` (2.48 GB) is built; container `jenkins` is running on `localhost:8080`. Allure CLI tool configured at `/opt/allure-2.29.0`. Credentials store has three Secret-text entries with correct IDs (`danaconnect-company`, `danaconnect-username`, `danaconnect-password`) after fixing a typo where the first credential's ID was originally `venturestars` (the value instead of the key). Pipeline job `danaconnect-framework-tests` created in Jenkins, pointing at `projects/danaconnect-framework-tests/ci-cd/Jenkinsfile` on `*/main` of the public GitHub repo.
+**Path to green (this session, 2026-05-13):**
+- Build #2 failed at `playwright install chromium` (exit 127). Root cause: pip in the container falls back to `--user` install because system site-packages is root-owned; user-installed console scripts land in `/var/jenkins_home/.local/bin`, off the default PATH. Fix: prepend that dir to PATH in the Jenkinsfile `environment {}` block.
+- Build #3 failed at the actual test stages. Two distinct root causes:
+  1. Playwright conftest hardcoded `headless=False` → container has no X server.
+  2. Selenium conftest let Selenium Manager auto-download chromedriver → no `linux/aarch64` binary published; the container is ARM64 (Apple Silicon host).
+- Fix for both: env-driven `HEADLESS` flag (default True) + Selenium falls back to the apt-installed `/usr/bin/chromedriver` + `--no-sandbox`, `--disable-dev-shm-usage`, `--window-size`, and `binary_location='/usr/bin/chromium'`. Local dev (Mac) still works because both paths gracefully fall back to Selenium Manager + headed mode via `HEADLESS=false`.
+- Build #4: ✅ green.
+
+**Container/image state (verified today, 2026-05-13):** image `danaconnect-jenkins:lts` (2.48 GB) built; container `jenkins` running on `localhost:8080`. Allure CLI tool configured at `/opt/allure-2.29.0`. Three Secret-text credentials with correct IDs (`danaconnect-company`, `danaconnect-username`, `danaconnect-password`) — earlier session had a typo where the first credential's ID was the value `venturestars` instead of the key. Pipeline job points at `projects/danaconnect-framework-tests/ci-cd/Jenkinsfile` on `*/main` of the public GitHub repo (`Annoyingflipper/QA-Testing`).
+
+**Open items for the next session:**
+- **Cypress Allure integration.** The `post.always.allure([...])` block only ingests Playwright + Selenium result dirs; Cypress writes mochawesome instead. Add an Allure adapter for Cypress and include its result dir in the post block.
+- **Cypress double-run.** Both heavy + lean specs execute on every Jenkins run (4 specs for 2 logical tests). Decide whether to apply `excludeSpecPattern: 'cypress/e2e/lean/**/*'` to `cypress.config.js` for CI runs.
+- **Pip install per build is slow.** Bake Python deps into `ci-cd/Dockerfile.jenkins` so `pip install -r requirements.txt` is a no-op in CI. Same for `playwright install chromium`.
+- **Two small Jenkinsfile gaps still open:** (a) `archiveArtifacts` for screenshots/videos isn't wired up; (b) `post.failure` only does an `echo` — could send a notification.
+- **Pending from earlier sessions, NOT touched this session:** Jenkins admin password + DANAConnect work-account password rotations (both pasted in chat history during prior sessions); Max's session file is still the 04-21 stale template and his TC-SE-001 markdown has the wrong (URL-path) assertion that Kai flagged.
 
 This session covered three threads: (1) CEO session persistence is now set up — this very file + protocol in CLAUDE.md + propagated to qa-team-builder v1/v2 skills; (2) custom Jenkins Dockerfile written at `ci-cd/Dockerfile.jenkins` to fix the bare-LTS gap (no Python/Node/Chrome); (3) Kai shipped TC-CY-001 + TC-CY-002 (Cypress), bringing the framework to parity with Luna's two Playwright tests.
 
