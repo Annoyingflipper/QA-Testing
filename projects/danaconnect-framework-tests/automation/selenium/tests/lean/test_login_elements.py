@@ -1,5 +1,6 @@
 """Selenium login-elements-present test (lean — for learning version see tests/test_login_elements.py)."""
 
+import allure
 import pytest
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -8,11 +9,17 @@ from selenium.common.exceptions import TimeoutException
 from pages.lean.login_page import LoginPage
 
 
+pytestmark = [allure.feature("Login")]
+
+
 @pytest.fixture(scope="function")
 def login_page(driver):
     return LoginPage(driver)
 
 
+@allure.story("Login page renders all 7 required elements")
+@allure.severity(allure.severity_level.CRITICAL)
+@allure.title("All 7 login page elements are visible on a fresh visit")
 @pytest.mark.smoke
 @pytest.mark.login
 def test_all_login_page_elements_are_visible(driver, login_page, base_url):

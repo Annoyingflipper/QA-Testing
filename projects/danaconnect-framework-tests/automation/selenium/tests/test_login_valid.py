@@ -47,7 +47,16 @@ How Selenium differs from Playwright (for learning)
 """
 
 # ── Standard-library and third-party imports ───────────────────────────
+import allure                                                        # Allure adapter — emits per-test labels
 import pytest                                                        # Test framework + markers
+
+
+# ── Allure feature label (applies to every test in this module) ────────
+# `pytestmark` is a pytest convention: any marker assigned to this name
+# at module scope is applied to every test in the file. The Allure
+# feature "Login" puts every test here under one "Login" group in the
+# Behaviors tab. Story/severity decorators below add the next levels.
+pytestmark = [allure.feature("Login")]
 
 # ── Selenium imports ───────────────────────────────────────────────────
 # ``WebDriverWait`` polls a condition at a fixed interval until it
@@ -85,6 +94,19 @@ def login_page(driver):
 #   pytest -m login       → run only login-feature tests
 # The markers are registered in ``automation/selenium/pytest.ini`` so
 # pytest does not emit a ``PytestUnknownMarkWarning``.
+@allure.story("Valid login routes user to MainView")
+# `@allure.story(...)` describes the user-facing scenario. Stories
+# sit one level below `feature` in the Behaviors tab — this test
+# appears under: Login > Valid login routes user to MainView. Same
+# story name as the Playwright equivalent so the report can pivot
+# on "same scenario, different framework".
+@allure.severity(allure.severity_level.BLOCKER)
+# BLOCKER is the highest severity — login is the front door, and
+# every other authenticated test depends on it. Mirrors the
+# `@pytest.mark.critical` marker below.
+@allure.title("Valid credentials authenticate and reach #!MainView")
+# `@allure.title(...)` overrides the verbose function name with
+# a human-readable sentence in the Allure report's test list.
 @pytest.mark.smoke
 @pytest.mark.critical
 @pytest.mark.login

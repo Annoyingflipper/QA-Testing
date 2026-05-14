@@ -41,12 +41,20 @@ the DOM but is hidden via CSS is invisible to a real user. Tests
 should agree with the user's perspective.
 """
 
+import allure                                                        # Allure adapter — emits per-test labels
 import pytest                                                        # Test framework + markers
 from selenium.webdriver.support.ui import WebDriverWait              # Explicit wait
 from selenium.webdriver.support import expected_conditions as EC     # Readable conditions
 from selenium.common.exceptions import TimeoutException              # Debuggable failures
 
 from pages.login_page import LoginPage                               # Our POM
+
+
+# ── Allure feature label (applies to every test in this module) ────────
+# Module-level `pytestmark` applies `@allure.feature("Login")` to every
+# test in this file. In the Behaviors tab they show up under "Login"
+# next to the valid-login test from test_login_valid.py.
+pytestmark = [allure.feature("Login")]
 
 
 # ── Test-scoped fixture: login_page ────────────────────────────────────
@@ -63,6 +71,15 @@ def login_page(driver):
 # This test is ``smoke`` (runs on every commit) and ``login`` (feature
 # group), but NOT ``critical``. A missing privacy-link regression
 # should not block a release the way a broken login would.
+@allure.story("Login page renders all 7 required elements")
+# Same story label as Playwright's elements test — lets the report
+# pivot on "same scenario across frameworks".
+@allure.severity(allure.severity_level.CRITICAL)
+# CRITICAL (not BLOCKER) because a missing element is a serious
+# regression but doesn't break the system the way a broken login
+# would. The choice matches the absence of `@pytest.mark.critical`
+# below: this test is smoke, not release-blocking.
+@allure.title("All 7 login page elements are visible on a fresh visit")
 @pytest.mark.smoke
 @pytest.mark.login
 def test_all_login_page_elements_are_visible(driver, login_page, base_url):

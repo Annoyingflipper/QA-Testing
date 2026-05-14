@@ -1,5 +1,6 @@
 """Selenium valid-login test (lean — for learning version see tests/test_login_valid.py)."""
 
+import allure
 import pytest
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -8,11 +9,17 @@ from selenium.common.exceptions import TimeoutException
 from pages.lean.login_page import LoginPage
 
 
+pytestmark = [allure.feature("Login")]
+
+
 @pytest.fixture(scope="function")
 def login_page(driver):
     return LoginPage(driver)
 
 
+@allure.story("Valid login routes user to MainView")
+@allure.severity(allure.severity_level.BLOCKER)
+@allure.title("Valid credentials authenticate and reach #!MainView")
 @pytest.mark.smoke
 @pytest.mark.critical
 @pytest.mark.login

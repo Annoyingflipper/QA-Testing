@@ -22,10 +22,20 @@ Assertions philosophy (Playwright):
 
 import re                                       # Regex for URL pattern matching
 
+import allure                                   # Allure adapter — emits per-test labels
 import pytest                                   # Test framework + markers
 from playwright.sync_api import expect          # Auto-waiting assertions
 
 from pages.login_page import LoginPage          # Our POM class
+
+
+# ── Allure feature label (applies to every test in this module) ───────
+# `pytestmark` is a pytest convention: any marker assigned to this name
+# at module scope is applied to every test in the file. Putting the
+# `@allure.feature(...)` decorator here means we don't have to repeat
+# it on every test below. In the Allure report's Behaviors tab, every
+# test here will appear under the "Login" feature group.
+pytestmark = [allure.feature("Login")]
 
 
 # ── Test Markers ──────────────────────────────────────────────────────
@@ -35,6 +45,20 @@ from pages.login_page import LoginPage          # Our POM class
 # These markers are registered in pytest.ini (or can be added there later).
 
 
+@allure.story("Valid login routes user to MainView")
+# `@allure.story(...)` describes the user-facing scenario. Stories
+# sit one level below `feature` in the Behaviors tab — so this test
+# will show up under: Login > Valid login routes user to MainView.
+@allure.severity(allure.severity_level.BLOCKER)
+# Severity drives the colour-coded breakdowns in the Allure Graphs
+# and Categories tabs. BLOCKER is the most severe: a failure here
+# means the system is fundamentally unusable. Login is the front
+# door — if it's broken, no other test even has a chance.
+@allure.title("Valid credentials authenticate and route to #!MainView")
+# `@allure.title(...)` overrides the long pytest function name in
+# the report's test list. The function name remains verbose for
+# code-search/grep, but the human reading the report sees a
+# sentence-case description.
 @pytest.mark.smoke          # Part of the fast smoke suite
 @pytest.mark.critical       # Blocking priority — must pass
 @pytest.mark.login          # Feature group
@@ -126,6 +150,14 @@ def test_valid_login_redirects_away_from_login_page(page, base_url, credentials)
     expect(page).to_have_url(re.compile(r"#!MainView"))
 
 
+@allure.story("Login page renders all 7 required elements")
+@allure.severity(allure.severity_level.CRITICAL)
+# CRITICAL (not BLOCKER) because a missing privacy link or footer
+# is a serious regression but doesn't render the system unusable
+# the way a broken login would. The choice mirrors the existing
+# pytest markers below — this test does NOT have
+# `@pytest.mark.critical`, while the valid-login test does.
+@allure.title("All 7 login page elements are visible on a fresh visit")
 @pytest.mark.smoke          # Part of the fast smoke suite
 @pytest.mark.login          # Feature group
 def test_all_login_page_elements_are_visible(page, base_url):

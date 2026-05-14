@@ -2,12 +2,19 @@
 
 import re
 
+import allure
 import pytest
 from playwright.sync_api import expect
 
 from pages.lean.login_page import LoginPage
 
 
+pytestmark = [allure.feature("Login")]
+
+
+@allure.story("Valid login routes user to MainView")
+@allure.severity(allure.severity_level.BLOCKER)
+@allure.title("Valid credentials authenticate and route to #!MainView")
 @pytest.mark.smoke
 @pytest.mark.critical
 @pytest.mark.login
@@ -37,6 +44,9 @@ def test_valid_login_redirects_away_from_login_page(page, base_url, credentials)
     expect(page).to_have_url(re.compile(r"#!MainView"))
 
 
+@allure.story("Login page renders all 7 required elements")
+@allure.severity(allure.severity_level.CRITICAL)
+@allure.title("All 7 login page elements are visible on a fresh visit")
 @pytest.mark.smoke
 @pytest.mark.login
 def test_all_login_page_elements_are_visible(page, base_url):
