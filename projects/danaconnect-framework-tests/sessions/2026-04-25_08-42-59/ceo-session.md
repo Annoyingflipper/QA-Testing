@@ -1,26 +1,41 @@
 # CEO Session — DANAConnect Framework Tests
-# Last updated: 2026-05-13 (pipeline GREEN on build #4)
+# Last updated: 2026-05-13 (Allure unified across all 3 frameworks on build #7)
 
 ## Where we left off
 
-**Jenkins pipeline `danaconnect-framework-tests` is GREEN as of build #4 (commit `51614f7`).** All three frameworks ran in parallel against the live portal and passed: Playwright 2/2 (14.67s), Selenium 2/2 (15.72s), Cypress 4/4 (13s — 2 heavy + 2 lean specs). Allure report generated from the Playwright + Selenium result dirs and archived as a build artifact.
+**Pipeline is GREEN through build #7 (commit `4e730a6`), and the unified Allure report now covers all three frameworks.** Every test result carries the full label set (`parentSuite`, `feature`, `story`, `severity`, `displayName`), so the Suites tab cleanly separates Playwright / Selenium / Cypress and the Behaviors tab groups by feature → story across frameworks. The original goal of the project — side-by-side comparison of three frameworks on the same scenarios — is now achievable in a single dashboard.
 
-**Path to green (this session, 2026-05-13):**
-- Build #2 failed at `playwright install chromium` (exit 127). Root cause: pip in the container falls back to `--user` install because system site-packages is root-owned; user-installed console scripts land in `/var/jenkins_home/.local/bin`, off the default PATH. Fix: prepend that dir to PATH in the Jenkinsfile `environment {}` block.
-- Build #3 failed at the actual test stages. Two distinct root causes:
+**Build counts at the end of this session:**
+- Playwright: 2 tests (1 BLOCKER, 1 CRITICAL) under `parentSuite=Playwright`.
+- Selenium: 2 tests (1 BLOCKER, 1 CRITICAL) under `parentSuite=Selenium`.
+- Cypress: 4 tests (2 BLOCKER, 2 CRITICAL — the doubling is heavy + lean both running) under `parentSuite=Cypress`.
+- Two shared stories across frameworks: "Valid login routes user to MainView" + "Login page renders all 7 required elements".
+
+**Path through today's seven builds (2026-05-13):**
+- **#1** — first build, failed in `environment {}` block: `ERROR: danaconnect-company`. Root cause: the first Jenkins credential had `venturestars` as its ID (the value got pasted into the ID field). Fix: delete + recreate with ID `danaconnect-company`.
+- **#2** — failed at `playwright install chromium` (exit 127). Root cause: pip falls back to `--user` install because system site-packages is root-owned; console scripts land in `/var/jenkins_home/.local/bin`, off PATH. Fix: prepend that dir to PATH in Jenkinsfile `environment {}` block.
+- **#3** — failed in the test stages. Two distinct root causes:
   1. Playwright conftest hardcoded `headless=False` → container has no X server.
   2. Selenium conftest let Selenium Manager auto-download chromedriver → no `linux/aarch64` binary published; the container is ARM64 (Apple Silicon host).
-- Fix for both: env-driven `HEADLESS` flag (default True) + Selenium falls back to the apt-installed `/usr/bin/chromedriver` + `--no-sandbox`, `--disable-dev-shm-usage`, `--window-size`, and `binary_location='/usr/bin/chromium'`. Local dev (Mac) still works because both paths gracefully fall back to Selenium Manager + headed mode via `HEADLESS=false`.
-- Build #4: ✅ green.
+- Fix for #3: env-driven `HEADLESS` flag (default True) + Selenium falls back to the apt-installed `/usr/bin/chromedriver` + container-friendly Chrome flags + `binary_location='/usr/bin/chromium'`. Local dev (Mac) still works because both paths gracefully fall back to Selenium Manager + headed mode via `HEADLESS=false`.
+- **#4** — first GREEN. All three frameworks pass. Allure report ingests Playwright + Selenium only (Cypress was still on mochawesome).
+- **#5** — added `parentSuite` autouse fixture in both Python conftests so the Suites tab would split Playwright vs Selenium. The new results had the right label, but the OLD results from #3 + #4 were still in the workspace volume and showed `parentSuite='tests'` (the pre-fix default). Report showed THREE groups: tests/Playwright/Selenium.
+- **#6** — added `--clean-alluredir` to both pytest invocations to wipe stale result JSON before each build writes. Suites tab finally shows only the two clean groups.
+- **#7** — final state. Added @allure.feature/severity/story/title decorators to all 6 Python test files (heavy + lean), installed `allure-cypress` + `allure-js-commons`, wired both halves of the plugin (node-side in `cypress.config.js`, browser-side in `support/e2e.js`), labelled both Cypress test files with parentSuite/feature/story/severity/displayName, added the Cypress result dir to the post-block `allure([...])`, removed the redundant `--reporter mochawesome` flag, and added `rm -rf` of the Cypress result dir before each run (no built-in clean option in allure-cypress).
 
-**Container/image state (verified today, 2026-05-13):** image `danaconnect-jenkins:lts` (2.48 GB) built; container `jenkins` running on `localhost:8080`. Allure CLI tool configured at `/opt/allure-2.29.0`. Three Secret-text credentials with correct IDs (`danaconnect-company`, `danaconnect-username`, `danaconnect-password`) — earlier session had a typo where the first credential's ID was the value `venturestars` instead of the key. Pipeline job points at `projects/danaconnect-framework-tests/ci-cd/Jenkinsfile` on `*/main` of the public GitHub repo (`Annoyingflipper/QA-Testing`).
+**Container/image state (verified today, 2026-05-13):** image `danaconnect-jenkins:lts` (2.48 GB) built; container `jenkins` running on `localhost:8080`. Allure CLI tool configured with Installation directory = `/opt/allure-2.29.0` (NOT `/usr/local/bin/allure` — that's the binary symlink; the plugin field expects the install root). Three Secret-text credentials with correct IDs. Pipeline job points at `projects/danaconnect-framework-tests/ci-cd/Jenkinsfile` on `*/main` of the public GitHub repo (`Annoyingflipper/QA-Testing`). Note: GitHub auth for `git push` is via PAT under the `Annoyingflipper` account (the keychain previously cached `annoyingflipper-student`, which has no write access to the repo).
 
-**Open items for the next session:**
-- **Cypress Allure integration.** The `post.always.allure([...])` block only ingests Playwright + Selenium result dirs; Cypress writes mochawesome instead. Add an Allure adapter for Cypress and include its result dir in the post block.
-- **Cypress double-run.** Both heavy + lean specs execute on every Jenkins run (4 specs for 2 logical tests). Decide whether to apply `excludeSpecPattern: 'cypress/e2e/lean/**/*'` to `cypress.config.js` for CI runs.
-- **Pip install per build is slow.** Bake Python deps into `ci-cd/Dockerfile.jenkins` so `pip install -r requirements.txt` is a no-op in CI. Same for `playwright install chromium`.
+**Open items for the next session (prioritised):**
+- **Cypress double-run.** Both heavy + lean specs execute on every Jenkins run (4 specs for 2 logical tests, visible in the Allure report as duplicated entries under Cypress). Apply `excludeSpecPattern: 'cypress/e2e/lean/**/*'` to `cypress.config.js`, OR introduce a CI-only Cypress config. Pending CEO decision.
+- **Pip install per build is slow.** Each build re-downloads ~50 MB of Python wheels. Bake Python deps into `ci-cd/Dockerfile.jenkins` so `pip install -r requirements.txt` becomes a no-op (or near-no-op). Same for `playwright install chromium`. Build time drops from ~3-4 min to ~1-2 min.
+- **Auto-trigger builds on push.** Currently every build is manual. Add `triggers { pollSCM('H/5 * * * *') }` to the Jenkinsfile so Jenkins notices new commits within ~5 min without manual intervention. Webhook is the better solution long-term but requires Jenkins to be reachable from GitHub (currently localhost-only).
 - **Two small Jenkinsfile gaps still open:** (a) `archiveArtifacts` for screenshots/videos isn't wired up; (b) `post.failure` only does an `echo` — could send a notification.
-- **Pending from earlier sessions, NOT touched this session:** Jenkins admin password + DANAConnect work-account password rotations (both pasted in chat history during prior sessions); Max's session file is still the 04-21 stale template and his TC-SE-001 markdown has the wrong (URL-path) assertion that Kai flagged.
+- **Pending from earlier sessions, NOT touched today:** Jenkins admin password + DANAConnect work-account password rotations (both pasted in chat history during prior sessions); Max's session file is still the 04-21 stale template and his TC-SE-001 markdown has the wrong (URL-path) assertion that Kai flagged.
+
+**Decisions made today (2026-05-13):**
+- Auto-trigger NOT wired up yet — left as an explicit follow-up. CEO chose manual builds while learning the cycle; auto-trigger is the natural next step once the report's quality is locked in.
+- `allure-cypress` (official, allure-framework-maintained) chosen over `@shelex/cypress-allure-plugin` (3rd-party).
+- `displayName` (NOT pytest function name) used as test name in the report. Function names stay verbose for code search/grep.
 
 This session covered three threads: (1) CEO session persistence is now set up — this very file + protocol in CLAUDE.md + propagated to qa-team-builder v1/v2 skills; (2) custom Jenkins Dockerfile written at `ci-cd/Dockerfile.jenkins` to fix the bare-LTS gap (no Python/Node/Chrome); (3) Kai shipped TC-CY-001 + TC-CY-002 (Cypress), bringing the framework to parity with Luna's two Playwright tests.
 
