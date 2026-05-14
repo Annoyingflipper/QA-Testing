@@ -13,6 +13,7 @@ Key differences from Playwright:
 """
 
 import os                          # For reading environment variables
+import allure                      # Allure adapter — emits the per-test result JSON
 import pytest                      # The test framework
 from dotenv import load_dotenv     # Reads .env file into environment variables
 from selenium import webdriver     # Selenium browser automation
@@ -20,6 +21,25 @@ from selenium.webdriver.chrome.service import Service  # Explicit chromedriver p
 
 # ── Load environment variables from .env file ──────────────────────────
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+
+
+@pytest.fixture(autouse=True)
+def _allure_parent_suite():
+    """
+    Tag every test in this folder as belonging to the "Selenium"
+    parent suite in the Allure report.
+
+    See the matching fixture in the Playwright conftest for the
+    full rationale. Short version: Allure merges suites by name
+    across result dirs, so without a parent_suite label both
+    framework folders collapse into one "tests" group and you
+    can't tell who wrote each test in the Suites tab.
+
+    Setting `parent_suite="Selenium"` puts every test in this
+    folder under a top-level "Selenium" group, giving the
+    side-by-side framework comparison the project is built for.
+    """
+    allure.dynamic.parent_suite("Selenium")
 
 
 @pytest.fixture(scope="session")

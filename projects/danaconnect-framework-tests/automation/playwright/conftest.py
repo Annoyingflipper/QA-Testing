@@ -15,6 +15,7 @@ Key concepts:
 """
 
 import os                          # For reading environment variables
+import allure                      # Allure adapter — emits the per-test result JSON
 import pytest                      # The test framework itself
 from dotenv import load_dotenv     # Reads .env file into environment variables
 from playwright.sync_api import sync_playwright  # Playwright browser automation
@@ -24,6 +25,43 @@ from playwright.sync_api import sync_playwright  # Playwright browser automation
 # available via os.getenv(). We go up 2 levels from this file's location
 # to find the project root where .env lives.
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
+
+
+@pytest.fixture(autouse=True)
+def _allure_parent_suite():
+    """
+    Tag every test in this folder as belonging to the "Playwright"
+    parent suite in the Allure report.
+
+    Why this matters
+    ----------------
+    Allure's Suites tab has a 3-level hierarchy:
+        parent_suite > suite > sub_suite
+    Without `parent_suite`, pytest tests collapse into a single suite
+    named after the parent directory ("tests"). When the combined
+    report is generated from BOTH framework result dirs, the two
+    `tests` suites merge — and you can no longer tell which test
+    came from Playwright vs Selenium.
+
+    Setting `parent_suite="Playwright"` here puts every test in this
+    folder under a top-level "Playwright" group in the Suites tab.
+
+    Why autouse=True
+    ----------------
+    `autouse=True` means pytest runs this fixture before every test
+    automatically, without the test having to request it. Equivalent
+    to decorating every test with @allure.parent_suite("Playwright")
+    but without touching the test files.
+
+    Why allure.dynamic instead of @allure.parent_suite
+    --------------------------------------------------
+    The decorator form (`@allure.parent_suite(...)`) is evaluated
+    statically at collection time and needs to wrap each test.
+    `allure.dynamic.parent_suite(...)` mutates the live test's
+    labels at runtime. Either works, but the dynamic form lets us
+    apply the label centrally from the conftest.
+    """
+    allure.dynamic.parent_suite("Playwright")
 
 
 @pytest.fixture(scope="session")
