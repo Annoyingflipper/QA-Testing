@@ -84,9 +84,15 @@ pipeline {
                 stage('Playwright Tests') {
                     steps {
                         dir("${PROJECT_DIR}/automation/playwright") {
+                            // --clean-alluredir wipes any results from a
+                            // prior build before this one writes — otherwise
+                            // stale JSON accumulates in the workspace volume
+                            // and the merged Allure report shows a mix of
+                            // old + current data.
                             sh '''
                                 pytest tests/ \
                                     --alluredir=../../reports/allure-results/playwright \
+                                    --clean-alluredir \
                                     -v \
                                     --tb=short
                             '''
@@ -97,9 +103,12 @@ pipeline {
                 stage('Selenium Tests') {
                     steps {
                         dir("${PROJECT_DIR}/automation/selenium") {
+                            // See Playwright stage above for why
+                            // --clean-alluredir is necessary.
                             sh '''
                                 pytest tests/ \
                                     --alluredir=../../reports/allure-results/selenium \
+                                    --clean-alluredir \
                                     -v \
                                     --tb=short
                             '''
