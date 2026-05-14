@@ -119,7 +119,18 @@ pipeline {
                 stage('Cypress Tests') {
                     steps {
                         dir("${PROJECT_DIR}/automation/cypress") {
-                            sh 'npx cypress run --reporter mochawesome'
+                            // Wipe stale Cypress allure-results from the
+                            // workspace volume before this run, mirroring
+                            // pytest's --clean-alluredir flag. The allure-cypress
+                            // plugin appends per-test JSON to resultsDir and
+                            // has no built-in clean step, so we do it here.
+                            sh 'rm -rf ../../reports/allure-results/cypress'
+                            // No --reporter flag: the allure-cypress plugin
+                            // (wired via setupNodeEvents in cypress.config.js)
+                            // is what now feeds the Allure report. Cypress's
+                            // default spec reporter prints the per-test
+                            // pass/fail output to the console log.
+                            sh 'npx cypress run'
                         }
                     }
                 }
@@ -131,11 +142,15 @@ pipeline {
     // These run after all stages, regardless of success or failure.
     post {
         always {
-            // Generate Allure report from all test results
+            // Generate Allure report from all test results. The plugin
+            // merges JSON from all three framework dirs into one report,
+            // and the parentSuite labels on each result keep the three
+            // frameworks visually separated in the Suites tab.
             allure([
                 results: [
                     [path: "${env.PROJECT_DIR}/reports/allure-results/playwright"],
-                    [path: "${env.PROJECT_DIR}/reports/allure-results/selenium"]
+                    [path: "${env.PROJECT_DIR}/reports/allure-results/selenium"],
+                    [path: "${env.PROJECT_DIR}/reports/allure-results/cypress"]
                 ]
             ])
         }

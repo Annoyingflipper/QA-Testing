@@ -20,6 +20,14 @@ require('dotenv').config({ path: '../../.env' });
 // ── Import Cypress's config helper ────────────────────────────────────
 const { defineConfig } = require('cypress');
 
+// ── Import the Allure plugin's node-side hook ─────────────────────────
+// allure-cypress has TWO halves: a Node-side hook (this one) that
+// listens to Cypress lifecycle events and writes JSON result files,
+// and a browser-side import (in support/e2e.js) that captures test
+// data while a test is running. Both must be wired up for the report
+// to be complete.
+const { allureCypress } = require('allure-cypress/reporter');
+
 module.exports = defineConfig({
   projectId: 'jo88tn',
 
@@ -54,10 +62,16 @@ module.exports = defineConfig({
     // This function runs in Node.js (not in the browser).
     // Used to configure plugins like Allure reporting.
     setupNodeEvents(on, config) {
-      // Allure reporter plugin (generates rich test reports)
-      // Uncomment when allure plugin is installed:
-      // const allureWriter = require('@shelex/cypress-allure-plugin/writer');
-      // allureWriter(on, config);
+      // ── Allure plugin: writes per-test JSON result files ─────────
+      // resultsDir is RELATIVE to this file's directory
+      // (automation/cypress/). The path ../../reports/... resolves
+      // to <project>/reports/allure-results/cypress — same place the
+      // Playwright and Selenium pytest invocations write their
+      // results, so all three frameworks share one Allure dataset
+      // and the Jenkins post block can merge them into one report.
+      allureCypress(on, config, {
+        resultsDir: '../../reports/allure-results/cypress',
+      });
 
       return config;
     },

@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@shelex/cypress-allure-plugin": "^2.40.2",
+    "allure-cypress": "^3.8.0",
     "cypress": "^15.14.1",
     "dotenv": "^16.4.5",
     "mochawesome": "^7.1.3",

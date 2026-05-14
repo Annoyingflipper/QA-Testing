@@ -35,6 +35,14 @@
 
 import loginPage from '../pages/LoginPage';
 
+// ── Allure labels API ────────────────────────────────────────────────
+// `allure-js-commons` is the cross-framework label/step API that
+// `allure-cypress` re-exports through its plugin hooks. Importing it
+// as a namespace gives us functions like allure.feature(...),
+// allure.severity(...), allure.parentSuite(...) — the same vocabulary
+// the Python tests use via @allure.feature / @allure.severity.
+import * as allure from 'allure-js-commons';
+
 describe('Login', () => {
 
   /**
@@ -82,6 +90,23 @@ describe('Login', () => {
   //   always fail. The only reliable logged-in signal is the presence
   //   of "#!MainView" in the URL.
   it('logs in with valid credentials and routes to #!MainView', () => {
+
+    // ── Allure metadata for this test ────────────────────────────────
+    // Mirrors what the Python tests get via decorators:
+    //   parentSuite — top-level grouping in the Suites tab (per
+    //                 framework: Playwright / Selenium / Cypress).
+    //   feature     — feature group in the Behaviors tab.
+    //   story       — same string as the Playwright / Selenium twins
+    //                 of this test so the report can pivot on
+    //                 "same scenario, different framework".
+    //   severity    — BLOCKER: login is the front door; system
+    //                 unusable if broken.
+    //   displayName — readable title in the report's test list.
+    allure.parentSuite('Cypress');
+    allure.feature('Login');
+    allure.story('Valid login routes user to MainView');
+    allure.severity('blocker');
+    allure.displayName('Valid credentials authenticate and route to #!MainView');
 
     // ── Sanity check: credentials are actually set ───────────────────
     // If .env is missing a value, Cypress.env() returns '' (per the
@@ -148,6 +173,16 @@ describe('Login', () => {
   //   This test never submits the form. It only asserts that the form
   //   is *drawn correctly*. So no Cypress.env() calls.
   it('shows all 7 login page elements on a fresh visit', () => {
+    // ── Allure metadata ──────────────────────────────────────────────
+    // CRITICAL (not BLOCKER) because a missing element is a regression
+    // but not release-blocking the way a broken login would be.
+    // Same story string as the Playwright / Selenium twins.
+    allure.parentSuite('Cypress');
+    allure.feature('Login');
+    allure.story('Login page renders all 7 required elements');
+    allure.severity('critical');
+    allure.displayName('All 7 login page elements are visible on a fresh visit');
+
     // Each `.should('be.visible')` is an auto-retrying assertion —
     // Cypress polls up to defaultCommandTimeout (10s) waiting for the
     // element to render. On a Vaadin SPA that's exactly the safety

@@ -16,6 +16,17 @@
 // as cy.commandName() in all test files.
 import './commands';
 
+// ── Browser-side half of the Allure plugin ────────────────────────────
+// This import installs Cypress event hooks that capture test data
+// (titles, steps, screenshots on failure, etc.) and stream it to the
+// Node-side writer registered in cypress.config.js. WITHOUT this
+// import, the node-side writer would never receive events and the
+// allure-results directory would stay empty even though tests run.
+//
+// The two halves communicate via Cypress's built-in plugin event bus
+// — no extra wiring needed.
+import 'allure-cypress';
+
 // ── Global error handling ─────────────────────────────────────────────
 // Prevent Cypress from failing on uncaught exceptions from the
 // application itself. Some apps throw errors in the console that
